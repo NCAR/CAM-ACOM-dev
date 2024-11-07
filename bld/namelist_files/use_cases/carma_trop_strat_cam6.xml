@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <namelist_defaults>
 
-<start_ymd>10101</start_ymd>
-<ncdata hgrid="1.9x2.5" nlev="32">atm/cam/inic/fv/FCnudged_f19.carma_mode_dev_n05_cam6_2_037.base.cam.i.1991-01-01-00000_c210607.nc</ncdata>
-<ncdata hgrid="0.9x1.25" nlev="32">atm/cam/inic/fv/FCnudged_f09.carma_mode_dev_n13_cam6_2_037.2000.001.cam.i.2001-01-01-00000_c211207.nc</ncdata>
+<ncdata hgrid="1.9x2.5" nlev="32">atm/cam/inic/fv/FCARMAnudged_f19_carmats3128_spinup01.cam.i.1991-01-01_c241023.nc</ncdata>
+<ncdata hgrid="1.9x2.5" nlev="32" aquaplanet="1">atm/cam/inic/fv/QPCARMATS_f19_carmats4038_spinup01_0002-01-01_c241029.nc</ncdata>
+<ncdata hgrid="0.9x1.25" nlev="32">atm/cam/inic/fv/FCARMA2000climo_f09_carmats4038_spinup01_0002-01-01_c241029.nc</ncdata>
 
 <lght_no_prd_factor hgrid="1.9x2.5">4.5D0</lght_no_prd_factor>
 

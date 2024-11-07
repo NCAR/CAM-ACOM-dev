@@ -83,10 +83,10 @@
 <ncdata dyn="fv"  hgrid="10x15"     nlev="32"                 carma="trop_strat_soa5">atm/cam/inic/fv/carma_trop_strat_2000_10x15_spinup01.cam.i.0002-01-01-00000_c211027.nc</ncdata>
 <ncdata dyn="fv"  hgrid="10x15"     nlev="32"  aquaplanet="1" carma="trop_strat_soa5">atm/cam/inic/fv/aqua_carma_trop_strat_10x15_spinup01.cam.i.0002-01-01-00000_c211027.nc</ncdata>
 
-<ncdata dyn="fv"  hgrid="1.9x2.5"   nlev="32"  aquaplanet="1" carma="trop_strat_soa5">atm/cam/inic/fv/aqua_carma_trop_strat_0002-01-01_1.9x2.5_L32_c220304.nc</ncdata>
+<ncdata dyn="fv"  hgrid="1.9x2.5"   nlev="32"  aquaplanet="1" carma="trop_strat_soa5">atm/cam/inic/fv/QPCARMATS_f19_carmats4038_spinup01_0002-01-01_c241029.nc</ncdata>
 
 <ncdata dyn="fv"  hgrid="10x15"     nlev="70"  aquaplanet="1" carma="trop_strat_soa1">atm/waccm/ic/aqua_carma_waccm_0002-01-01_10x15_L70_c220325.nc</ncdata>
-<ncdata dyn="fv"  hgrid="1.9x2.5"   nlev="70"                 carma="trop_strat_soa1">atm/cam/inic/fv/FWmaCARMAnudged.f19_f19_mg17.carma_trop_strat.2000.001.cam.i.2001-01-01-00000_c220325.nc</ncdata>
+<ncdata dyn="fv"  hgrid="1.9x2.5"   nlev="70"                 carma="trop_strat_soa1">atm/waccm/ic/FWmaCARMAHIST_f19_carmats038_spinupl03.cam.i.1980-01-01_c241025.nc</ncdata>
 <ncdata dyn="fv"  hgrid="1.9x2.5"   nlev="70"  aquaplanet="1" carma="trop_strat_soa1">atm/cam/inic/fv/aqua_carma_waccm_0002-01-01_1.9x2.5_L70_c220809.nc</ncdata>
 <ncdata dyn="fv"  hgrid="0.9x1.25"  nlev="70"                 carma="trop_strat_soa1">atm/waccm/ic/FWmaCARMAHIST_f09_spinup01.cam.i.1980-01-01-00000_c220128.nc</ncdata>
 
