@@ -610,30 +610,13 @@ contains
   ! returns minimum mass mean radius (meters)
   !------------------------------------------------------------------------------
   function min_mass_mean_rad(self,bin_ndx,species_ndx) result(minrad)
-    use carma_intr, only: carma_get_bin_radius
-    use carma_intr, only: carma_get_group_by_name
-
     class(carma_aerosol_properties), intent(in) :: self
     integer, intent(in) :: bin_ndx           ! bin number
     integer, intent(in) :: species_ndx       ! species number
 
     real(r8) :: minrad  ! meters
-    real(r8) :: radcm
 
-    character(len=aero_name_len) :: bin_name, shortname
-    integer :: igroup, ibin, rc, nchr
-
-    call rad_cnst_get_info_by_bin(0, bin_ndx, bin_name=bin_name)
-
-    nchr = len_trim(bin_name)-2
-    shortname = bin_name(:nchr)
-
-    call carma_get_group_by_name(shortname, igroup, rc)
-
-    read(bin_name(nchr+1:),*) ibin
-
-    call carma_get_bin_radius(igroup, ibin, radcm, rc)
-    minrad = radcm*1.e-2_r8 ! meters
+    minrad = 0.0_r8
 
   end function min_mass_mean_rad
 

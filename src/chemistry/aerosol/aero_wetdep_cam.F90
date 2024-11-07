@@ -557,9 +557,10 @@ contains
 
           end if
 
-          masses_loop: do l = 0,aero_props%nspecies(m)
+          elem_loop: do l = 0,aero_props%nspecies(m)
 
              ndx = aero_cnst_id(m,l)
+             if (ndx<1) cycle elem_loop
 
              if (.not. cldbrn .and. ndx>0) then
                 insolfr_ptr => fracis(:,:,ndx)
@@ -585,11 +586,7 @@ contains
                 qqcw_in = nan
                 f_act_conv = nan
              else ! interstial aerosol
-                if (ndx>0) then
-                   q_tmp(1:ncol,:) = raer(mm)%fld(1:ncol,:) + ptend%q(1:ncol,:,ndx)*dt
-                else
-                   q_tmp(1:ncol,:) = raer(mm)%fld(1:ncol,:)
-                end if
+                q_tmp(1:ncol,:) = raer(mm)%fld(1:ncol,:) + ptend%q(1:ncol,:,ndx)*dt
                 if (l==0) then
                    jnv = 1
                 else
@@ -636,7 +633,7 @@ contains
                 end if
              endif
 
-             if (cldbrn .or. ndx<0) then
+             if (cldbrn) then
                 do k = 1,pver
                    do i = 1,ncol
                       if ( (qqcw(mm)%fld(i,k) + dqdt_tmp(i,k) * dt) .lt. 0.0_r8 )   then
@@ -792,7 +789,7 @@ contains
                 end if
              end if
 
-          end do masses_loop
+          end do elem_loop
        end do phase_loop
 
     end do bins_loop

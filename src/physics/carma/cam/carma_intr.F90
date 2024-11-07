@@ -92,8 +92,6 @@ module carma_intr
   public :: carma_get_wght_pct
   public :: carma_effecitive_radius
 
-  public :: carma_get_bin_radius
-
   ! NOTE: This is required by physpkg.F90, since the carma_intr.F90 stub in physics/cam
   ! does not have access to carma_constant.F90, but needs to also provide a defintion
   ! for MAXCLDAERDIAG. Thus the definition of this variable needs to come from
@@ -1841,6 +1839,8 @@ contains
     logical           :: is_cloud  ! is the group a cloud?
     logical           :: do_drydep ! is dry deposition enabled?
 
+    character(len=*), parameter :: subname = 'carma_output_diagnostics'
+
     ! Initialize the return code.
     rc = 0
 
@@ -1858,10 +1858,10 @@ contains
       do ibin = 1, NBIN
 
         call CARMAELEMENT_Get(carma, ielem, rc, igroup=igroup)
-        if (rc < 0) call endrun('carma_timestep_tend::CARMAELEMENT_Get failed.')
+        if (rc < 0) call endrun(subname//'::CARMAELEMENT_Get failed.')
 
         call CARMAGROUP_Get(carma, igroup, rc, cnsttype=cnsttype, maxbin=maxbin, do_drydep=do_drydep)
-        if (rc < 0) call endrun('carma_timestep_tend::CARMAGROUP_Get failed.')
+        if (rc < 0) call endrun(subname//'::CARMAGROUP_Get failed.')
 
         if (cnsttype == I_CNSTTYPE_PROGNOSTIC) then
 
@@ -1892,7 +1892,7 @@ contains
     ! Output the particle diagnostics.
     do igroup = 1, NGROUP
       call CARMAGROUP_Get(carma, igroup, rc, shortname=sname, is_cloud=is_cloud, do_drydep=do_drydep, ienconc=ienconc)
-      if (rc < 0) call endrun('carma_output_diagnostics::CARMAGROUP_Get failed.')
+      if (rc < 0) call endrun(subname//'::CARMAGROUP_Get failed.')
 
       ! Gridbox average
       call outfld(trim(sname)//'ND', gpdiags(:, :, igroup, GPDIAGS_ND), pcols, lchnk)
@@ -4108,27 +4108,5 @@ contains
     rad(:ncol,:) = (rtmp3(:ncol,:)/rtmp2(:ncol,:))*100._r8 ! cm
 
   end function carma_effecitive_radius
-
-  !-----------------------------------------------------------------------------
-  !-----------------------------------------------------------------------------
-  subroutine carma_get_bin_radius(igroup, ibin, radius, rc)
-
-    integer, intent(in)               :: igroup                !! group index
-    integer, intent(in)               :: ibin                  !! bin index
-    real(r8),intent(out)              :: radius ! cm ???
-    integer, intent(out)              :: rc                    !! return code
-
-    real(r8)                          :: rad(carma%f_NBIN)   ! the bin radius
-
-    ! default return code
-    rc = RC_OK
-
-    call CARMAGROUP_Get(carma, igroup, rc, r=rad) ! cm
-    if (rc /= RC_OK) return
-
-    radius = rad(ibin)
-
-  end subroutine carma_get_bin_radius
-
 
 end module carma_intr

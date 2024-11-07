@@ -221,11 +221,6 @@ subroutine aer_rad_props_sw(list_idx, state, pbuf,  nnite, idxnite, &
    call rad_cnst_get_info(list_idx, naero=numaerosols, nmodes=nmodes, nbins=nbins)
 
    ! Contributions from modal and bin aerosols.
-   tau    (1:ncol,:,:) = 0._r8
-   tau_w  (1:ncol,:,:) = 0._r8
-   tau_w_g(1:ncol,:,:) = 0._r8
-   tau_w_f(1:ncol,:,:) = 0._r8
-
    if (nmodes>0 .or. nbins>0) then
       call aerosol_optics_cam_sw(list_idx, state, pbuf, nnite, idxnite, &
                                  tau, tau_w, tau_w_g, tau_w_f)
@@ -383,8 +378,6 @@ subroutine aer_rad_props_lw(list_idx, state, pbuf,  odap_aer)
    call rad_cnst_get_info(list_idx, naero=numaerosols, nmodes=nmodes, nbins=nbins)
 
    ! Contributions from modal and sectional aerosols.
-   odap_aer = 0._r8
-
    if (nmodes>0 .or. nbins>0) then
       call aerosol_optics_cam_lw(list_idx, state, pbuf, odap_aer)
    else

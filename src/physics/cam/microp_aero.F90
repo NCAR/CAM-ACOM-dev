@@ -317,7 +317,6 @@ subroutine microp_aero_init(phys_state,pbuf2d)
          call endrun(routine//': ERROR required mode-species type not found')
       end if
 
-   elseif (clim_carma_aero) then
    else
 
       ! Props needed for BAM number concentration calcs.
