@@ -38,8 +38,6 @@ module carma_intr
   public carma_timestep_init            ! initialize timestep dependent variables
   public carma_timestep_tend            ! interface to tendency computation
   public carma_accumulate_stats         ! collect stats from all MPI tasks
-  public carma_checkstate_global        ! check if the coremass exceeding the total, globally
-  public carma_calculate_globalmassfactor ! determine mass factors needed for carma_checkstate_global
 
   ! Other Microphysics
   public carma_emission_tend            ! calculate tendency from emission source function
@@ -161,27 +159,6 @@ contains
 
     return
   end subroutine carma_timestep_tend
-
-
-  subroutine carma_calculate_globalmassfactor(state)
-    use ppgrid,     only: begchunk, endchunk
-
-    type(physics_state), intent(in), dimension(begchunk:endchunk) :: state  !! All the chunks in this task.
-    return
-  end subroutine carma_calculate_globalmassfactor
-
-
-  subroutine carma_checkstate_global(state, ptend, dt)
-    use physconst,     only: gravit
-
-    type(physics_state), intent(in)     :: state        !! Physics state variables - before CARMA
-    type(physics_ptend), intent(inout)  :: ptend        !! indivdual parameterization tendencies
-    real(r8), intent(in)                :: dt           !! timestep (s)
-
-    call physics_ptend_init(ptend,state%psetcols,'none') !Initialize an empty ptend for use with physics_update
-
-    return
-  end subroutine carma_checkstate_global
 
 
   subroutine carma_init_cnst(name, latvals, lonvals, mask, q)
