@@ -3,6 +3,9 @@
 !----------------------------------------------------------------------------------
 module cloud_aqueous_chemistry
 
+#define USE_MAM
+#undef USE_CARMA
+
   use shr_kind_mod, only : r8 => shr_kind_r8
   use cam_logfile,  only : iulog
   use physics_buffer,only: physics_buffer_desc, pbuf_get_index, pbuf_add_field, dtype_r8
@@ -38,7 +41,12 @@ contains
     use spmd_utils,   only : masterproc
     use phys_control, only : phys_getopts
     use carma_flags_mod, only : carma_do_cloudborne
-    use clouds, only : sox_cldaero_init
+#ifdef USE_MAM
+    use mam_clouds, only : sox_cldaero_init
+#endif
+#ifdef USE_CARMA
+    use carma_clouds, only : sox_cldaero_init
+#endif
 
     logical :: modal_aerosols
 
