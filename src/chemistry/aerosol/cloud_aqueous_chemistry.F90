@@ -137,7 +137,7 @@ contains
        endif
        return
     end if
-
+    
     call sox_cldaero_init()
 
   end subroutine sox_inti
