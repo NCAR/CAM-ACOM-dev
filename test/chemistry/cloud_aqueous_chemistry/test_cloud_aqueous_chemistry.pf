@@ -1,7 +1,9 @@
 @Test
 subroutine test_cloud_aqueous_chemistry()
   use funit
+  use cloud_aqueous_chemistry, only: sox_inti, setsox
 
   @assertEqual(1, 1)
+  call sox_inti()
 
 end subroutine test_cloud_aqueous_chemistry
