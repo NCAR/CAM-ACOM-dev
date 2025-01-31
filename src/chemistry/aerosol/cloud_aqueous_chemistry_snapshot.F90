@@ -39,8 +39,11 @@ contains
       call addfld( 'cloud_qin_'//trim(adjustl(index_string))//'_out', (/ 'lev' /), 'I', 'vmr', 'transported species' )
     end do
     call addfld( 'cloud_xphlwc_out',     (/ 'lev' /), 'I', 'unitless', 'ph value multiplied by cloud liquid water content' )
-    call addfld( 'cloud_aqso4_out',      (/ 'lev' /), 'I', 'unknown',  'aqueous phase SO4 chemistry?' )
-    call addfld( 'cloud_aqh2so4_out',    (/ 'lev' /), 'I', 'unknown',  'aqueous phase H2SO4 chemistry?' )
+    do i_elem = 1, 4
+      write(index_string, '(I10)') i_elem
+      call addfld( 'cloud_aqso4_'//trim(adjustl(index_string))//'_out',   horiz_only, 'I', 'unknown', 'aqueous phase chemistry' )
+      call addfld( 'cloud_aqh2so4_'//trim(adjustl(index_string))//'_out', horiz_only, 'I', 'unknown', 'aqueous phase chemistry' )
+    end do
     call addfld( 'cloud_aqso4_h2o2_out', horiz_only,  'I', 'kg m-2',   'SO4 aqueous phase chemistry due to H2O2?' )
     call addfld( 'cloud_aqso4_o3_out',   horiz_only,  'I', 'kg m-2',   'SO4 aqueous phase chemistry due to O3?' )
     
@@ -68,12 +71,13 @@ contains
     real(r8),         intent(in)    :: cldnum(:,:)       ! droplet number concentration (#/kg)
     real(r8),         intent(in)    :: xhnm(:,:)         ! total atms density ( /cm**3)
     real(r8),         intent(in)    :: invariants(:,:,:)
-    real(r8), target, intent(inout) :: qcw(:,:,:)        ! cloud-borne aerosol (vmr)
-    real(r8),         intent(inout) :: qin(:,:,:)        ! transported species ( vmr )
+    real(r8), target, intent(in)    :: qcw(:,:,:)        ! cloud-borne aerosol (vmr)
+    real(r8),         intent(in)    :: qin(:,:,:)        ! transported species ( vmr )
 
     integer :: i_elem
     character(len=10) :: index_string
 
+#if 0
     if (is_main_process) then
       write(iulog,*) "*****************************"
       write(iulog,*) "Cloud Chemistry scalar inputs"
@@ -87,6 +91,7 @@ contains
       write(iulog,*) "qcw dims: ", size(qcw, dim=1), size(qcw, dim=2), size(qcw, dim=3)
       write(iulog,*) "qin dims: ", size(qin, dim=1), size(qin, dim=2), size(qin, dim=3)
     end if
+#endif
     call outfld( 'cloud_press_in',  press,  ncol, lchnk )
     call outfld( 'cloud_pdel_in',   pdel,   ncol, lchnk )
     call outfld( 'cloud_tfld_in',   tfld,   ncol, lchnk )
@@ -114,29 +119,32 @@ contains
 
     use cam_history, only : outfld
 
-    integer,          intent(in)    :: ncol              ! num of columns in chunk
-    integer,          intent(in)    :: lchnk             ! chunk id
-    real(r8), target, intent(inout) :: qcw(:,:,:)        ! cloud-borne aerosol (vmr)
-    real(r8),         intent(inout) :: qin(:,:,:)        ! transported species ( vmr )
-    real(r8),         intent(out)   :: xphlwc(:,:)       ! pH value multiplied by lwc
+    integer,          intent(in)   :: ncol              ! num of columns in chunk
+    integer,          intent(in)   :: lchnk             ! chunk id
+    real(r8), target, intent(in)   :: qcw(:,:,:)        ! cloud-borne aerosol (vmr)
+    real(r8),         intent(in)   :: qin(:,:,:)        ! transported species ( vmr )
+    real(r8),         intent(in)   :: xphlwc(:,:)       ! pH value multiplied by lwc
 
-    real(r8),         intent(out)   :: aqso4(:,:)        ! aqueous phase chemistry
-    real(r8),         intent(out)   :: aqh2so4(:,:)      ! aqueous phase chemistry
-    real(r8),         intent(out)   :: aqso4_h2o2(:)     ! SO4 aqueous phase chemistry due to H2O2 (kg/m2)
-    real(r8),         intent(out)   :: aqso4_o3(:)       ! SO4 aqueous phase chemistry due to O3 (kg/m2)
+    real(r8),         intent(in)   :: aqso4(:,:)        ! aqueous phase chemistry
+    real(r8),         intent(in)   :: aqh2so4(:,:)      ! aqueous phase chemistry
+    real(r8),         intent(in)   :: aqso4_h2o2(:)     ! SO4 aqueous phase chemistry due to H2O2 (kg/m2)
+    real(r8),         intent(in)   :: aqso4_o3(:)       ! SO4 aqueous phase chemistry due to O3 (kg/m2)
 
     integer :: i_elem
     character(len=10) :: index_string
 
-    call outfld( 'cloud_xphlwc_out',     xphlwc,     ncol, lchnk )
-    call outfld( 'cloud_aqso4_out',      aqso4,      ncol, lchnk )
-    call outfld( 'cloud_aqh2so4_out',    aqh2so4,    ncol, lchnk )
-    call outfld( 'cloud_aqso4_h2o2_out', aqso4_h2o2, ncol, lchnk )
-    call outfld( 'cloud_aqso4_o3_out',   aqso4_o3,   ncol, lchnk )
+    call outfld( 'cloud_xphlwc_out',     xphlwc(:ncol,:),     ncol, lchnk )
+    call outfld( 'cloud_aqso4_h2o2_out', aqso4_h2o2(:ncol),   ncol, lchnk )
+    call outfld( 'cloud_aqso4_o3_out',   aqso4_o3(:ncol),     ncol, lchnk )
+    do i_elem = 1, 4
+      write(index_string, '(I10)') i_elem
+      call outfld( 'cloud_aqso4_'//trim(adjustl(index_string))//'_out',   aqso4(:ncol,i_elem),   ncol, lchnk )
+      call outfld( 'cloud_aqh2so4_'//trim(adjustl(index_string))//'_out', aqh2so4(:ncol,i_elem), ncol, lchnk )
+    end do
     do i_elem = 1, 26
       write(index_string, '(I10)') i_elem
-      call outfld( 'cloud_qcw_'//trim(adjustl(index_string))//'_out', qcw(:,:,i_elem), ncol, lchnk )
-      call outfld( 'cloud_qin_'//trim(adjustl(index_string))//'_out', qin(:,:,i_elem), ncol, lchnk )
+      call outfld( 'cloud_qcw_'//trim(adjustl(index_string))//'_out', qcw(:ncol,:,i_elem), ncol, lchnk )
+      call outfld( 'cloud_qin_'//trim(adjustl(index_string))//'_out', qin(:ncol,:,i_elem), ncol, lchnk )
     end do
 
   end subroutine cloud_snapshot_capture_output
