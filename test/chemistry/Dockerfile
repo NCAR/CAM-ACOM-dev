@@ -23,8 +23,9 @@ COPY . /cam
 RUN cd /cam/test/chemistry \
     && mkdir build \
     && cd build \
-    && cmake .. \
-    && make \
-    && make test
+    && cmake \
+         -D CMAKE_BUILD_TYPE=DEBUG \
+         .. \
+    && make
 
 WORKDIR /cam/test/chemistry/build

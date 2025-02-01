@@ -194,7 +194,7 @@ contains
 #ifdef USE_MAM
     use mam_clouds,      only : sox_cldaero_update, sox_cldaero_create_obj, sox_cldaero_destroy_obj
 #endif
-#ifdef USE_CLOUDS
+#ifdef USE_CARMA
     use carma_clouds,    only : sox_cldaero_update, sox_cldaero_create_obj, sox_cldaero_destroy_obj
 #endif
     use cloud_utilities, only : cldaero_conc_t
