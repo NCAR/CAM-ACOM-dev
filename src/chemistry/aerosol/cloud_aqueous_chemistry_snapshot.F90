@@ -92,22 +92,22 @@ contains
       write(iulog,*) "qin dims: ", size(qin, dim=1), size(qin, dim=2), size(qin, dim=3)
     end if
 #endif
-    call outfld( 'cloud_press_in',  press,  ncol, lchnk )
-    call outfld( 'cloud_pdel_in',   pdel,   ncol, lchnk )
-    call outfld( 'cloud_tfld_in',   tfld,   ncol, lchnk )
-    call outfld( 'cloud_mbar_in',   mbar,   ncol, lchnk )
-    call outfld( 'cloud_lwc_in',    lwc,    ncol, lchnk )
-    call outfld( 'cloud_cldfrc_in', cldfrc, ncol, lchnk )
-    call outfld( 'cloud_cldnum_in', cldnum, ncol, lchnk )
-    call outfld( 'cloud_xhnm_in',   xhnm,   ncol, lchnk )
+    call outfld( 'cloud_press_in',  press(:ncol,:),  ncol, lchnk )
+    call outfld( 'cloud_pdel_in',   pdel(:ncol,:),   ncol, lchnk )
+    call outfld( 'cloud_tfld_in',   tfld(:ncol,:),   ncol, lchnk )
+    call outfld( 'cloud_mbar_in',   mbar(:ncol,:),   ncol, lchnk )
+    call outfld( 'cloud_lwc_in',    lwc(:ncol,:),    ncol, lchnk )
+    call outfld( 'cloud_cldfrc_in', cldfrc(:ncol,:), ncol, lchnk )
+    call outfld( 'cloud_cldnum_in', cldnum(:ncol,:), ncol, lchnk )
+    call outfld( 'cloud_xhnm_in',   xhnm(:ncol,:),   ncol, lchnk )
     do i_elem = 1, 7
       write(index_string, '(I10)') i_elem
-      call outfld( 'cloud_invariants_'//trim(adjustl(index_string))//'_in', invariants(:,:,i_elem), ncol, lchnk )
+      call outfld( 'cloud_invariants_'//trim(adjustl(index_string))//'_in', invariants(:ncol,:,i_elem), ncol, lchnk )
     end do
     do i_elem = 1, 26
       write(index_string, '(I10)') i_elem
-      call outfld( 'cloud_qcw_'//trim(adjustl(index_string))//'_in', qcw(:,:,i_elem), ncol, lchnk )
-      call outfld( 'cloud_qin_'//trim(adjustl(index_string))//'_in', qin(:,:,i_elem), ncol, lchnk )
+      call outfld( 'cloud_qcw_'//trim(adjustl(index_string))//'_in', qcw(:ncol,:,i_elem), ncol, lchnk )
+      call outfld( 'cloud_qin_'//trim(adjustl(index_string))//'_in', qin(:ncol,:,i_elem), ncol, lchnk )
     end do
 
   end subroutine cloud_snapshot_capture_input
