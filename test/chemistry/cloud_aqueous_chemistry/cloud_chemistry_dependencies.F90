@@ -5,6 +5,12 @@ module shr_kind_mod
   integer, parameter :: shr_kind_r8 = kind(0.0d0)
 end module shr_kind_mod
 
+module spmd_utils
+  implicit none
+  public :: masterproc
+  logical :: masterproc = .true.
+end module spmd_utils
+
 module cam_logfile
   implicit none
   public :: iulog
@@ -99,7 +105,7 @@ module chem_mods
   public :: gas_pcnst, nfs, adv_mass
   integer, parameter :: gas_pcnst = 26
   integer, parameter :: nfs = 1
-  real(kind=r8), parameter :: adv_mass = (/ &
+  real(kind=r8), parameter :: adv_mass(*) = (/ &
           12.010999999999999, 12.010999999999999, 62.132399999999997, &
           135.06403900000001, 135.06403900000001, 135.06403900000001, 34.013599999999997, &
           98.078400000000002, 58.442467999999998, 58.442467999999998, 58.442467999999998, &
