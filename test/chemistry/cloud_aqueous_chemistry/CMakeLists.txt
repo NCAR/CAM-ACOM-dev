@@ -15,5 +15,8 @@ create_standard_test(
     ../../../src/chemistry/aerosol/cloud_aqueous_chemistry.F90
     ../../../src/chemistry/aerosol/cloud_utilities.F90
     ../../../src/chemistry/modal_aero/mam_clouds.F90
+    ../../../src/chemistry/aerosol/mo_setsox.F90
+    ../../../src/chemistry/aerosol/cldaero_mod.F90
+    ../../../src/chemistry/modal_aero/sox_cldaero_mod.F90
   WORKING_DIRECTORY
     ${CMAKE_BINARY_DIR}/cloud_aqueous_chemistry)

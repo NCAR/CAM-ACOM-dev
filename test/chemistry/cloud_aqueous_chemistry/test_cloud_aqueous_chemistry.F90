@@ -51,7 +51,7 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine test_as_primary_rank()
+  subroutine test_as_primary_rank_against_snapshot()
    
     use spmd_utils, only: masterproc
     use physics_buffer, only: physics_buffer_desc
@@ -100,11 +100,11 @@ contains
       stop 3
     end if
 
-  end subroutine test_as_primary_rank
+  end subroutine test_as_primary_rank_against_snapshot
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine test_as_other_rank()
+  subroutine test_as_other_rank_against_snapshot()
 
     use spmd_utils, only: masterproc
     use physics_buffer, only: physics_buffer_desc
@@ -153,7 +153,170 @@ contains
       stop 3
     end if
 
-  end subroutine test_as_other_rank
+  end subroutine test_as_other_rank_against_snapshot
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine test_as_primary_against_original_module()
+  
+    use spmd_utils, only: masterproc
+    use physics_buffer, only: physics_buffer_desc
+    use physics_types, only: physics_state
+    use cloud_aqueous_chemistry, only: new_sox_inti => sox_inti, new_setsox => setsox
+    use mo_setsox, only: old_sox_inti => sox_inti, old_setsox => setsox
+
+    type(chemistry_args), allocatable :: new_args(:), old_args(:), expected_outputs(:)
+    type(physics_buffer_desc), pointer :: pbuf(:)
+    type(physics_state) :: state
+    integer :: i
+
+    allocate(pbuf(n_columns_per_rank))
+    new_args = get_inputs()
+    old_args = get_inputs()
+    expected_outputs = get_expected_outputs()
+    call new_sox_inti()
+    call old_sox_inti()
+    do i = 1, size(new_args)
+      call new_setsox( &
+          state, &
+          pbuf, &
+          new_args(i)%ncol, &
+          new_args(i)%lchnk, &
+          new_args(i)%loffset, &
+          new_args(i)%dtime, &
+          new_args(i)%pres, &
+          new_args(i)%pdel, &
+          new_args(i)%tfld, &
+          new_args(i)%mbar, &
+          new_args(i)%lwc, &
+          new_args(i)%cldfrc, &
+          new_args(i)%cldnum, &
+          new_args(i)%xhnm, &
+          new_args(i)%invariants, &
+          new_args(i)%qcw, &
+          new_args(i)%qin, &
+          new_args(i)%xphlwc, &
+          new_args(i)%aqso4, &
+          new_args(i)%aqh2so4, &
+          new_args(i)%aqso4_h2o2, &
+          new_args(i)%aqso4_o3 &
+        )
+    end do
+    do i = 1, size(old_args)
+      call old_setsox( &
+          state, &
+          pbuf, &
+          old_args(i)%ncol, &
+          old_args(i)%lchnk, &
+          old_args(i)%loffset, &
+          old_args(i)%dtime, &
+          old_args(i)%pres, &
+          old_args(i)%pdel, &
+          old_args(i)%tfld, &
+          old_args(i)%mbar, &
+          old_args(i)%lwc, &
+          old_args(i)%cldfrc, &
+          old_args(i)%cldnum, &
+          old_args(i)%xhnm, &
+          old_args(i)%invariants, &
+          old_args(i)%qcw, &
+          old_args(i)%qin, &
+          old_args(i)%xphlwc, &
+          old_args(i)%aqso4, &
+          old_args(i)%aqh2so4, &
+          old_args(i)%aqso4_h2o2, &
+          old_args(i)%aqso4_o3 &
+        )
+    end do
+    deallocate(pbuf)
+    if (.not. compare_outputs(new_args, old_args)) then
+      write(*,*) 'Primary rank test against original module failed'
+      stop 3
+    end if
+
+  end subroutine test_as_primary_against_original_module
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine test_as_other_rank_against_original_module()
+  
+    use spmd_utils, only: masterproc
+    use physics_buffer, only: physics_buffer_desc
+    use physics_types, only: physics_state
+    use cloud_aqueous_chemistry, only: new_sox_inti => sox_inti, new_setsox => setsox
+    use mo_setsox, only: old_sox_inti => sox_inti, old_setsox => setsox
+
+    type(chemistry_args), allocatable :: new_args(:), old_args(:), expected_outputs(:)
+    type(physics_buffer_desc), pointer :: pbuf(:)
+    type(physics_state) :: state
+    integer :: i
+
+    allocate(pbuf(n_columns_per_rank))
+    masterproc = .false.
+    new_args = get_inputs()
+    old_args = get_inputs()
+    expected_outputs = get_expected_outputs()
+    call new_sox_inti()
+    call old_sox_inti()
+    do i = 1, size(new_args)
+      call new_setsox( &
+          state, &
+          pbuf, &
+          new_args(i)%ncol, &
+          new_args(i)%lchnk, &
+          new_args(i)%loffset, &
+          new_args(i)%dtime, &
+          new_args(i)%pres, &
+          new_args(i)%pdel, &
+          new_args(i)%tfld, &
+          new_args(i)%mbar, &
+          new_args(i)%lwc, &
+          new_args(i)%cldfrc, &
+          new_args(i)%cldnum, &
+          new_args(i)%xhnm, &
+          new_args(i)%invariants, &
+          new_args(i)%qcw, &
+          new_args(i)%qin, &
+          new_args(i)%xphlwc, &
+          new_args(i)%aqso4, &
+          new_args(i)%aqh2so4, &
+          new_args(i)%aqso4_h2o2, &
+          new_args(i)%aqso4_o3 &
+        )
+    end do
+    do i = 1, size(old_args)
+      call old_setsox( &
+          state, &
+          pbuf, &
+          old_args(i)%ncol, &
+          old_args(i)%lchnk, &
+          old_args(i)%loffset, &
+          old_args(i)%dtime, &
+          old_args(i)%pres, &
+          old_args(i)%pdel, &
+          old_args(i)%tfld, &
+          old_args(i)%mbar, &
+          old_args(i)%lwc, &
+          old_args(i)%cldfrc, &
+          old_args(i)%cldnum, &
+          old_args(i)%xhnm, &
+          old_args(i)%invariants, &
+          old_args(i)%qcw, &
+          old_args(i)%qin, &
+          old_args(i)%xphlwc, &
+          old_args(i)%aqso4, &
+          old_args(i)%aqh2so4, &
+          old_args(i)%aqso4_h2o2, &
+          old_args(i)%aqso4_o3 &
+        )
+    end do
+    deallocate(pbuf)
+    if (.not. compare_outputs(new_args, old_args)) then
+      write(*,*) 'Other rank test against original module failed'
+      stop 3
+    end if
+
+  end subroutine test_as_other_rank_against_original_module
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -539,10 +702,15 @@ end module test_cloud_aqueous_chemistry_mod
 
 program test_cloud_aqueous_chemistry
 
-  use test_cloud_aqueous_chemistry_mod, only: test_as_primary_rank, test_as_other_rank
+  use test_cloud_aqueous_chemistry_mod, only: test_as_primary_rank_against_snapshot, &
+                                              test_as_other_rank_against_snapshot, &
+                                              test_as_primary_against_original_module, &
+                                              test_as_other_rank_against_original_module
 
-  call test_as_primary_rank()
-  call test_as_other_rank()
+  call test_as_primary_rank_against_snapshot()
+  call test_as_other_rank_against_snapshot()
+  call test_as_primary_against_original_module()
+  call test_as_other_rank_against_original_module()
 
 end program test_cloud_aqueous_chemistry
 
