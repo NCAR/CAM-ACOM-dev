@@ -14,7 +14,8 @@ module test_cloud_aqueous_chemistry_mod
   integer, parameter :: n_species = 26
   integer, parameter :: n_modes = 4
 
-  character(len=*), parameter :: data_file = '../test/chemistry/data/QPC6-f10_f10_mg37.cam.h1i.0001-01-05-00000.nc'
+  character(len=*), parameter :: data_file = &
+      '../test/chemistry/data/QPC6-f10_f10_mg37.cam.h1i.0001-01-05-00000.nc'
 
   type :: chemistry_args
     integer :: ncol
@@ -95,8 +96,9 @@ contains
         )
     end do
     deallocate(pbuf)
-    if (.not. compare_outputs(chem_args, expected_outputs, 1.0e-6_r8, 1.0e-40_r8)) then
-      write(*,*) 'Primary rank test failed'
+    if (.not. compare_outputs(chem_args, expected_outputs, &
+                              1.0e-6_r8, 1.0e-40_r8)) then
+      write(*,*) 'Primary rank test against snapshot failed'
       stop 3
     end if
 
@@ -148,8 +150,9 @@ contains
         )
       end do
     deallocate(pbuf)
-    if (.not. compare_outputs(chem_args, expected_outputs, 1.0e-6_r8, 1.0e-40_r8)) then
-      write(*,*) 'Other rank test failed'
+    if (.not. compare_outputs(chem_args, expected_outputs, &
+                              1.0e-6_r8, 1.0e-40_r8)) then
+      write(*,*) 'Other rank test against snapshot failed'
       stop 3
     end if
 
@@ -162,10 +165,12 @@ contains
     use spmd_utils, only: masterproc
     use physics_buffer, only: physics_buffer_desc
     use physics_types, only: physics_state
-    use cloud_aqueous_chemistry, only: new_sox_inti => sox_inti, new_setsox => setsox
+    use cloud_aqueous_chemistry, only: new_sox_inti => sox_inti, &
+                                       new_setsox => setsox
     use mo_setsox, only: old_sox_inti => sox_inti, old_setsox => setsox
 
-    type(chemistry_args), allocatable :: new_args(:), old_args(:), expected_outputs(:)
+    type(chemistry_args), allocatable :: new_args(:), old_args(:)
+    type(chemistry_args), allocatable :: expected_outputs(:)
     type(physics_buffer_desc), pointer :: pbuf(:)
     type(physics_state) :: state
     integer :: i
@@ -243,10 +248,12 @@ contains
     use spmd_utils, only: masterproc
     use physics_buffer, only: physics_buffer_desc
     use physics_types, only: physics_state
-    use cloud_aqueous_chemistry, only: new_sox_inti => sox_inti, new_setsox => setsox
+    use cloud_aqueous_chemistry, only: new_sox_inti => sox_inti, &
+                                       new_setsox => setsox
     use mo_setsox, only: old_sox_inti => sox_inti, old_setsox => setsox
 
-    type(chemistry_args), allocatable :: new_args(:), old_args(:), expected_outputs(:)
+    type(chemistry_args), allocatable :: new_args(:), old_args(:)
+    type(chemistry_args), allocatable :: expected_outputs(:)
     type(physics_buffer_desc), pointer :: pbuf(:)
     type(physics_state) :: state
     integer :: i
@@ -360,52 +367,66 @@ contains
     end do
     call read_and_condense_columns(file, 'cloud_press_in', temp2d, n_layers)
     do i = 1, size(chem_args)
-      chem_args(i)%pres = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+      chem_args(i)%pres = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
     end do
     call read_and_condense_columns(file, 'cloud_pdel_in', temp2d, n_layers)
     do i = 1, size(chem_args)
-      chem_args(i)%pdel = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+      chem_args(i)%pdel = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
     end do
     call read_and_condense_columns(file, 'cloud_tfld_in', temp2d, n_layers)
     do i = 1, size(chem_args)
-      chem_args(i)%tfld = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+      chem_args(i)%tfld = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
     end do
     call read_and_condense_columns(file, 'cloud_mbar_in', temp2d, n_layers)
     do i = 1, size(chem_args)
-      chem_args(i)%mbar = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+      chem_args(i)%mbar = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
     end do
     call read_and_condense_columns(file, 'cloud_lwc_in', temp2d, n_layers)
     do i = 1, size(chem_args)
-      chem_args(i)%lwc = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+      chem_args(i)%lwc = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
     end do
     call read_and_condense_columns(file, 'cloud_cldfrc_in', temp2d, n_layers)
     do i = 1, size(chem_args)
-      chem_args(i)%cldfrc = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+      chem_args(i)%cldfrc = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
     end do
     call read_and_condense_columns(file, 'cloud_cldnum_in', temp2d, n_layers)
     do i = 1, size(chem_args)
-      chem_args(i)%cldnum = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+      chem_args(i)%cldnum = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
     end do
     call read_and_condense_columns(file, 'cloud_xhnm_in', temp2d, n_layers)
     do i = 1, size(chem_args)
-      chem_args(i)%xhnm = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+      chem_args(i)%xhnm = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
     end do
     do j = 1, n_invariants
       write(index_string, '(I2)') j
-      call read_and_condense_columns(file, 'cloud_invariants_'//trim(adjustl(index_string))//'_in', temp2d, n_layers)
+      call read_and_condense_columns(file, 'cloud_invariants_'// &
+              trim(adjustl(index_string))//'_in', temp2d, n_layers)
       do i = 1, size(chem_args)
-        chem_args(i)%invariants(:,:,j) = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+        chem_args(i)%invariants(:,:,j) = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
       end do
     end do
     do j = 1, n_species
       write(index_string, '(I2)') j
-      call read_and_condense_columns(file, 'cloud_qcw_'//trim(adjustl(index_string))//'_in', temp2d, n_layers)
+      call read_and_condense_columns(file, &
+          'cloud_qcw_'//trim(adjustl(index_string)) //'_in', temp2d, n_layers)
       do i = 1, size(chem_args)
-        chem_args(i)%qcw(:,:,j) = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+        chem_args(i)%qcw(:,:,j) = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
       end do
-      call read_and_condense_columns(file, 'cloud_qin_'//trim(adjustl(index_string))//'_in', temp2d, n_layers)
+      call read_and_condense_columns(file, &
+          'cloud_qin_'//trim(adjustl(index_string)) //'_in', temp2d, n_layers)
       do i = 1, size(chem_args)
-        chem_args(i)%qin(:,:,j) = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+        chem_args(i)%qin(:,:,j) = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
       end do
     end do
     do i = 1, size(chem_args)
@@ -436,37 +457,48 @@ contains
     file => file_io_t(data_file)
     do j = 1, n_species
       write(index_string, '(I2)') j
-      call read_and_condense_columns(file, 'cloud_qcw_'//trim(adjustl(index_string))//'_out', temp2d, n_layers)
+      call read_and_condense_columns(file, &
+          'cloud_qcw_'//trim(adjustl(index_string))//'_out', temp2d, n_layers)
       do i = 1, size(chem_args)
-        chem_args(i)%qcw(:,:,j) = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+        chem_args(i)%qcw(:,:,j) = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
       end do
-      call read_and_condense_columns(file, 'cloud_qin_'//trim(adjustl(index_string))//'_out', temp2d, n_layers)
+      call read_and_condense_columns(file, &
+          'cloud_qin_'//trim(adjustl(index_string))//'_out', temp2d, n_layers)
       do i = 1, size(chem_args)
-        chem_args(i)%qin(:,:,j) = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+        chem_args(i)%qin(:,:,j) = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
       end do
     end do
     call read_and_condense_columns(file, 'cloud_xphlwc_out', temp2d, n_layers)
     do i = 1, size(chem_args)
-      chem_args(i)%xphlwc(:,:) = temp2d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
+      chem_args(i)%xphlwc(:,:) = temp2d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
     end do
     do j = 1, n_modes
       write(index_string, '(I2)') j
-      call read_and_condense_columns(file, 'cloud_aqso4_'//trim(adjustl(index_string))//'_out', temp1d)
+      call read_and_condense_columns(file, &
+          'cloud_aqso4_'//trim(adjustl(index_string))//'_out', temp1d)
       do i = 1, size(chem_args)
-        chem_args(i)%aqso4(:,j) = temp1d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp1d)))
+        chem_args(i)%aqso4(:,j) = temp1d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp1d)))
       end do
-      call read_and_condense_columns(file, 'cloud_aqh2so4_'//trim(adjustl(index_string))//'_out', temp1d)
+      call read_and_condense_columns(file, &
+          'cloud_aqh2so4_'//trim(adjustl(index_string))//'_out', temp1d)
       do i = 1, size(chem_args)
-        chem_args(i)%aqh2so4(:,j) = temp1d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp1d)))
+        chem_args(i)%aqh2so4(:,j) = temp1d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp1d)))
       end do
     end do
     call read_and_condense_columns(file, 'cloud_aqso4_h2o2_out', temp1d)
     do i = 1, size(chem_args)
-      chem_args(i)%aqso4_h2o2(:) = temp1d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp1d)))
+      chem_args(i)%aqso4_h2o2(:) = temp1d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp1d)))
     end do
     call read_and_condense_columns(file, 'cloud_aqso4_o3_out', temp1d)
     do i = 1, size(chem_args)
-      chem_args(i)%aqso4_o3(:) = temp1d((i-1)*n_columns_per_rank+1:min(i*n_columns_per_rank,size(temp1d)))
+      chem_args(i)%aqso4_o3(:) = temp1d((i-1)*n_columns_per_rank+1 &
+                            : min(i*n_columns_per_rank,size(temp1d)))
     end do
     deallocate(file)
 
@@ -483,7 +515,8 @@ contains
     if (allocated(chem_args)) deallocate(chem_args)
     allocate(chem_args(n_ranks))
     do i = 1, size(chem_args)
-      chem_args(i)%ncol = min(n_columns_per_rank, n_lat*n_lon - (i-1)*n_columns_per_rank)
+      chem_args(i)%ncol = min(n_columns_per_rank, n_lat*n_lon - &
+                                (i-1)*n_columns_per_rank)
       chem_args(i)%lchnk = 11
       chem_args(i)%loffset = 9
       chem_args(i)%dtime = 1800.0_r8
@@ -497,7 +530,8 @@ contains
       allocate(chem_args(i)%cldfrc(chem_args(i)%ncol, n_layers))
       allocate(chem_args(i)%cldnum(chem_args(i)%ncol, n_layers))
       allocate(chem_args(i)%xhnm(chem_args(i)%ncol, n_layers))
-      allocate(chem_args(i)%invariants(chem_args(i)%ncol, n_layers, n_invariants))
+      allocate(chem_args(i)%invariants(chem_args(i)%ncol, n_layers, &
+                                       n_invariants))
       allocate(chem_args(i)%qcw(chem_args(i)%ncol, n_layers, n_species))
       allocate(chem_args(i)%qin(chem_args(i)%ncol, n_layers, n_species))
       allocate(chem_args(i)%xphlwc(chem_args(i)%ncol, n_layers))
@@ -584,91 +618,132 @@ contains
     do i = 1, size(calculated)
       do j = 1, calculated(i)%ncol
         do k = 1, n_layers
-          if (.not. check_close(calculated(i)%pres(j,k), expected(i)%pres(j,k), relative_tolerance, absolute_tolerance)) then
+          if (.not. check_close(calculated(i)%pres(j,k), &
+              expected(i)%pres(j,k), relative_tolerance, absolute_tolerance)) then
             print *, 'pres mismatch at column ', (i-1)*j, ' and layer ', k, &
-              ' calculated: ', calculated(i)%pres(j,k), ' expected: ', expected(i)%pres(j,k)
+              ' calculated: ', calculated(i)%pres(j,k), ' expected: ', &
+              expected(i)%pres(j,k)
             passed = .false.
           end if
-          if (.not. check_close(calculated(i)%pdel(j,k), expected(i)%pdel(j,k), relative_tolerance, absolute_tolerance)) then
+          if (.not. check_close(calculated(i)%pdel(j,k), &
+              expected(i)%pdel(j,k), relative_tolerance, absolute_tolerance)) then
             print *, 'pdel mismatch at column ', (i-1)*j, ' and layer ', k, &
-              ' calculated: ', calculated(i)%pdel(j,k), ' expected: ', expected(i)%pdel(j,k)
+              ' calculated: ', calculated(i)%pdel(j,k), ' expected: ', &
+              expected(i)%pdel(j,k)
             passed = .false.
           end if
-          if (.not. check_close(calculated(i)%tfld(j,k), expected(i)%tfld(j,k), relative_tolerance, absolute_tolerance)) then
+          if (.not. check_close(calculated(i)%tfld(j,k), &
+              expected(i)%tfld(j,k), relative_tolerance, absolute_tolerance)) then
             print *, 'tfld mismatch at column ', (i-1)*j, ' and layer ', k, &
-              ' calculated: ', calculated(i)%tfld(j,k), ' expected: ', expected(i)%tfld(j,k)
+              ' calculated: ', calculated(i)%tfld(j,k), ' expected: ', &
+              expected(i)%tfld(j,k)
             passed = .false.
           end if
-          if (.not. check_close(calculated(i)%mbar(j,k), expected(i)%mbar(j,k), relative_tolerance, absolute_tolerance)) then
+          if (.not. check_close(calculated(i)%mbar(j,k), &
+              expected(i)%mbar(j,k), relative_tolerance, absolute_tolerance)) then
             print *, 'mbar mismatch at column ', (i-1)*j, ' and layer ', k, &
-              ' calculated: ', calculated(i)%mbar(j,k), ' expected: ', expected(i)%mbar(j,k)
+              ' calculated: ', calculated(i)%mbar(j,k), ' expected: ', &
+              expected(i)%mbar(j,k)
             passed = .false.
           end if
-          if (.not. check_close(calculated(i)%lwc(j,k), expected(i)%lwc(j,k), relative_tolerance, absolute_tolerance)) then
+          if (.not. check_close(calculated(i)%lwc(j,k), &
+              expected(i)%lwc(j,k), relative_tolerance, absolute_tolerance)) then
             print *, 'lwc mismatch at column ', (i-1)*j, ' and layer ', k, &
-              ' calculated: ', calculated(i)%lwc(j,k), ' expected: ', expected(i)%lwc(j,k)
+              ' calculated: ', calculated(i)%lwc(j,k), ' expected: ', &
+              expected(i)%lwc(j,k)
             passed = .false.
           end if
-          if (.not. check_close(calculated(i)%cldfrc(j,k), expected(i)%cldfrc(j,k), relative_tolerance, absolute_tolerance)) then
+          if (.not. check_close(calculated(i)%cldfrc(j,k), &
+              expected(i)%cldfrc(j,k), relative_tolerance, absolute_tolerance)) then
             print *, 'cldfrc mismatch at column ', (i-1)*j, ' and layer ', k, &
-              ' calculated: ', calculated(i)%cldfrc(j,k), ' expected: ', expected(i)%cldfrc(j,k)
+              ' calculated: ', calculated(i)%cldfrc(j,k), ' expected: ', &
+              expected(i)%cldfrc(j,k)
             passed = .false.
           end if
-          if (.not. check_close(calculated(i)%cldnum(j,k), expected(i)%cldnum(j,k), relative_tolerance, absolute_tolerance)) then
+          if (.not. check_close(calculated(i)%cldnum(j,k), &
+              expected(i)%cldnum(j,k), relative_tolerance, absolute_tolerance)) then
             print *, 'cldnum mismatch at column ', (i-1)*j, ' and layer ', k, &
-              ' calculated: ', calculated(i)%cldnum(j,k), ' expected: ', expected(i)%cldnum(j,k)
+              ' calculated: ', calculated(i)%cldnum(j,k), ' expected: ', &
+              expected(i)%cldnum(j,k)
             passed = .false.
           end if
-          if (.not. check_close(calculated(i)%xhnm(j,k), expected(i)%xhnm(j,k), relative_tolerance, absolute_tolerance)) then
+          if (.not. check_close(calculated(i)%xhnm(j,k), &
+              expected(i)%xhnm(j,k), relative_tolerance, absolute_tolerance)) then
             print *, 'xhnm mismatch at column ', (i-1)*j, ' and layer ', k, &
-              ' calculated: ', calculated(i)%xhnm(j,k), ' expected: ', expected(i)%xhnm(j,k)
+              ' calculated: ', calculated(i)%xhnm(j,k), ' expected: ', &
+              expected(i)%xhnm(j,k)
             passed = .false.
           end if
           do l = 1, n_invariants
-            if (.not. check_close(calculated(i)%invariants(j,k,l), expected(i)%invariants(j,k,l), relative_tolerance, absolute_tolerance)) then
-              print *, 'invariants mismatch at column ', (i-1)*j, ' and layer ', k, ' and invariant ', l, &
-                ' calculated: ', calculated(i)%invariants(j,k,l), ' expected: ', expected(i)%invariants(j,k,l)
+            if (.not. check_close(calculated(i)%invariants(j,k,l), &
+                expected(i)%invariants(j,k,l), relative_tolerance, &
+                absolute_tolerance)) then
+              print *, 'invariants mismatch at column ', (i-1)*j, ' and layer ', &
+                k, ' and invariant ', l, ' calculated: ', &
+                calculated(i)%invariants(j,k,l), ' expected: ', &
+                expected(i)%invariants(j,k,l)
               passed = .false.
             end if
           end do
           do l = 1, n_species
-            if (.not. check_close(calculated(i)%qcw(j,k,l), expected(i)%qcw(j,k,l), relative_tolerance, absolute_tolerance)) then
-              print *, 'qcw mismatch at column ', (i-1)*j, ' and layer ', k, ' and species ', l, &
-                ' calculated: ', calculated(i)%qcw(j,k,l), ' expected: ', expected(i)%qcw(j,k,l)
+            if (.not. check_close(calculated(i)%qcw(j,k,l), &
+                expected(i)%qcw(j,k,l), relative_tolerance, &
+                absolute_tolerance)) then
+              print *, 'qcw mismatch at column ', (i-1)*j, ' and layer ', k, &
+                ' and species ', l, ' calculated: ', calculated(i)%qcw(j,k,l), &
+                ' expected: ', expected(i)%qcw(j,k,l)
               passed = .false.
             end if
-            if (.not. check_close(calculated(i)%qin(j,k,l), expected(i)%qin(j,k,l), relative_tolerance, absolute_tolerance)) then
-              print *, 'qin mismatch at column ', (i-1)*j, ' and layer ', k, ' and species ', l, &
-                ' calculated: ', calculated(i)%qin(j,k,l), ' expected: ', expected(i)%qin(j,k,l)
+            if (.not. check_close(calculated(i)%qin(j,k,l), &
+                expected(i)%qin(j,k,l), relative_tolerance, &
+                absolute_tolerance)) then
+              print *, 'qin mismatch at column ', (i-1)*j, ' and layer ', k, &
+                ' and species ', l, ' calculated: ', calculated(i)%qin(j,k,l), &
+                ' expected: ', expected(i)%qin(j,k,l)
               passed = .false.
             end if
           end do
-          if (.not. check_close(calculated(i)%xphlwc(j,k), expected(i)%xphlwc(j,k), relative_tolerance, absolute_tolerance)) then
+          if (.not. check_close(calculated(i)%xphlwc(j,k), &
+              expected(i)%xphlwc(j,k), relative_tolerance, &
+              absolute_tolerance)) then
             print *, 'xphlwc mismatch at column ', (i-1)*j, ' and layer ', k, &
-              ' calculated: ', calculated(i)%xphlwc(j,k), ' expected: ', expected(i)%xphlwc(j,k)
+              ' calculated: ', calculated(i)%xphlwc(j,k), ' expected: ', &
+              expected(i)%xphlwc(j,k)
             passed = .false.
           end if
           do l = 1, n_modes-1 ! the last mode is not actually set in the origical code
-            if (.not. check_close(calculated(i)%aqso4(j,l), expected(i)%aqso4(j,l), relative_tolerance, absolute_tolerance)) then
+            if (.not. check_close(calculated(i)%aqso4(j,l), &
+                expected(i)%aqso4(j,l), relative_tolerance, &
+                absolute_tolerance)) then
               print *, 'aqso4 mismatch at column ', (i-1)*j, ' and mode ', l, &
-                ' calculated: ', calculated(i)%aqso4(j,l), ' expected: ', expected(i)%aqso4(j,l)
+                ' calculated: ', calculated(i)%aqso4(j,l), ' expected: ', &
+                expected(i)%aqso4(j,l)
               passed = .false.
             end if
-            if (.not. check_close(calculated(i)%aqh2so4(j,l), expected(i)%aqh2so4(j,l), relative_tolerance, absolute_tolerance)) then
-              print *, 'aqh2so4 mismatch at column ', (i-1)*j, ' and mode ', l, &
-                ' calculated: ', calculated(i)%aqh2so4(j,l), ' expected: ', expected(i)%aqh2so4(j,l)
+            if (.not. check_close(calculated(i)%aqh2so4(j,l), &
+                expected(i)%aqh2so4(j,l), relative_tolerance, &
+                absolute_tolerance)) then
+              print *, 'aqh2so4 mismatch at column ', (i-1)*j, ' and mode ', &
+                l, ' calculated: ', calculated(i)%aqh2so4(j,l), ' expected: ',&
+                expected(i)%aqh2so4(j,l)
               passed = .false.
             end if
           end do
         end do
-        if (.not. check_close(calculated(i)%aqso4_h2o2(j), expected(i)%aqso4_h2o2(j), relative_tolerance, absolute_tolerance)) then
+        if (.not. check_close(calculated(i)%aqso4_h2o2(j), &
+            expected(i)%aqso4_h2o2(j), relative_tolerance, &
+            absolute_tolerance)) then
           print *, 'aqso4_h2o2 mismatch at column ', (i-1)*j, &
-            ' calculated: ', calculated(i)%aqso4_h2o2(j), ' expected: ', expected(i)%aqso4_h2o2(j)
+            ' calculated: ', calculated(i)%aqso4_h2o2(j), ' expected: ', &
+            expected(i)%aqso4_h2o2(j)
           passed = .false.
         end if
-        if (.not. check_close(calculated(i)%aqso4_o3(j), expected(i)%aqso4_o3(j), relative_tolerance, absolute_tolerance)) then
+        if (.not. check_close(calculated(i)%aqso4_o3(j), &
+            expected(i)%aqso4_o3(j), relative_tolerance, &
+            absolute_tolerance)) then
           print *, 'aqso4_o3 mismatch at column ', (i-1)*j, &
-            ' calculated: ', calculated(i)%aqso4_o3(j), ' expected: ', expected(i)%aqso4_o3(j)
+            ' calculated: ', calculated(i)%aqso4_o3(j), ' expected: ', &
+            expected(i)%aqso4_o3(j)
           passed = .false.
         end if
       end do
@@ -689,7 +764,8 @@ contains
 
     if (present(relative_tolerance)) l_rel_tol = relative_tolerance
     if (present(absolute_tolerance)) l_abs_tol = absolute_tolerance
-    check_close = abs(a - b) <= (abs(a) + abs(b))/2.0_r8 * l_rel_tol + l_abs_tol
+    check_close = abs(a - b) <= &
+                  (abs(a) + abs(b))/2.0_r8 * l_rel_tol + l_abs_tol
 
   end function check_close
 
@@ -702,10 +778,11 @@ end module test_cloud_aqueous_chemistry_mod
 
 program test_cloud_aqueous_chemistry
 
-  use test_cloud_aqueous_chemistry_mod, only: test_as_primary_rank_against_snapshot, &
-                                              test_as_other_rank_against_snapshot, &
-                                              test_as_primary_against_original_module, &
-                                              test_as_other_rank_against_original_module
+  use test_cloud_aqueous_chemistry_mod, only: &
+      test_as_primary_rank_against_snapshot, &
+      test_as_other_rank_against_snapshot, &
+      test_as_primary_against_original_module, &
+      test_as_other_rank_against_original_module
 
   call test_as_primary_rank_against_snapshot()
   call test_as_other_rank_against_snapshot()
