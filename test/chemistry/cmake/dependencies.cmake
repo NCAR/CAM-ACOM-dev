@@ -28,14 +28,3 @@ find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(netcdff IMPORTED_TARGET REQUIRED netcdf-fortran)
 pkg_check_modules(netcdfc IMPORTED_TARGET REQUIRED netcdf)
-
-# ##############################################################################
-# PFunit
-
-# FetchContent_Declare(
-#   pfunit
-#   GIT_REPOSITORY https://github.com/Goddard-Fortran-Ecosystem/pFUnit.git
-#   GIT_TAG main
-# )
-
-# FetchContent_MakeAvailable(pfunit)
