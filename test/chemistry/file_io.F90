@@ -15,14 +15,16 @@ module file_io
     character(len=:), allocatable :: path_
     integer :: id_ = kUnknownFileId
   contains
+    procedure :: read_1D_int
+    procedure :: read_1D_real
     procedure :: read_2D_int
     procedure :: read_2D_real
     procedure :: read_3D_int
     procedure :: read_3D_real
     procedure :: read_4D_int
     procedure :: read_4D_real
-    generic :: read => read_2D_int, read_2D_real, read_3D_int, read_3D_real, &
-                        read_4D_int, read_4D_real
+    generic :: read => read_1D_int, read_1D_real, read_2D_int, read_2D_real, &
+                       read_3D_int, read_3D_real, read_4D_int, read_4D_real
     final :: finalize
   end type file_io_t
 
@@ -82,6 +84,44 @@ contains
     end if
 
   end function constructor  
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine read_1D_int(self, variable_name, data)
+
+    use netcdf, only : nf90_inq_varid, nf90_get_var
+
+    class(file_io_t), intent(in) :: self
+    character(len=*), intent(in) :: variable_name
+    integer, dimension(:), intent(out) :: data
+
+    integer :: var_id
+
+    CHECK_STATUS(nf90_inq_varid(self%id_, trim(variable_name), var_id), \
+                 "Error getting variable id: '"//trim(variable_name)//"'")
+    CHECK_STATUS(nf90_get_var(self%id_, var_id, data), \
+                 "Error reading variable: '"//trim(variable_name)//"'")
+
+  end subroutine read_1D_int
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine read_1D_real(self, variable_name, data)
+
+    use netcdf, only : nf90_inq_varid, nf90_get_var
+
+    class(file_io_t), intent(in) :: self
+    character(len=*), intent(in) :: variable_name
+    real(r8), dimension(:), intent(out) :: data
+
+    integer :: var_id
+
+    CHECK_STATUS(nf90_inq_varid(self%id_, trim(variable_name), var_id), \
+                 "Error getting variable id: '"//trim(variable_name)//"'")
+    CHECK_STATUS(nf90_get_var(self%id_, var_id, data), \
+                 "Error reading variable: '"//trim(variable_name)//"'")
+
+  end subroutine read_1D_real
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
