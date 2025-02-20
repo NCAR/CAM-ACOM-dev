@@ -187,6 +187,7 @@ contains
     use modal_aero_gasaerexch, only: modal_aero_gasaerexch_init
     use modal_aero_newnuc,     only: modal_aero_newnuc_init
     use modal_aero_rename,     only: modal_aero_rename_init
+    use cloud_aqueous_chemistry_snapshot, only : cloud_snapshot_init
 
     ! args
     type(physics_buffer_desc), pointer :: pbuf2d(:,:)
@@ -543,6 +544,8 @@ contains
     endif
 
     call aero_wetdep_init()
+
+    call cloud_snapshot_init()
 
   end subroutine aero_model_init
 
@@ -960,7 +963,8 @@ contains
     use modal_aero_gasaerexch, only : modal_aero_gasaerexch_sub
     use modal_aero_newnuc,     only : modal_aero_newnuc_sub
     use modal_aero_data,       only : cnst_name_cw, qqcw_get_field
-
+    use cloud_aqueous_chemistry_snapshot, only : cloud_snapshot_capture_input, &
+                                                 cloud_snapshot_capture_output
     !-----------------------------------------------------------------------
     !      ... dummy arguments
     !-----------------------------------------------------------------------
@@ -1060,7 +1064,29 @@ contains
       dvmrcwdt(:ncol,:,:) = vmrcw(:ncol,:,:)
 
     ! aqueous chemistry ...
-
+      call cloud_snapshot_capture_input( &
+              ! pbuf,     &
+              ncol,     &
+              lchnk,    &
+              loffset,  &
+              delt,     &
+              pmid,     &
+              pdel,     &
+              tfld,     &
+              mbar,     &
+              cwat,     &
+              cldfr,    &
+              cldnum,   &
+              airdens,  &
+              invariants, &
+              vmrcw,    &
+              vmr      &
+              ! xphlwc,   &
+              ! aqso4,    &
+              ! aqh2so4,  &
+              ! aqso4_h2o2, &
+              ! aqso4_o3  &
+              )
       if( has_sox ) then
          call setsox( state, &
               pbuf,     &
@@ -1099,6 +1125,29 @@ contains
          call outfld( 'XPH_LWC',    xphlwc(:ncol,:),   ncol, lchnk )
 
       endif
+      call cloud_snapshot_capture_output( &
+              ! pbuf,     &
+              ncol,     &
+              lchnk,    &
+              ! loffset,  &
+              ! delt,     &
+              ! pmid,     &
+              ! pdel,     &
+              ! tfld,     &
+              ! mbar,     &
+              ! cwat,     &
+              ! cldfr,    &
+              ! cldnum,   &
+              ! airdens,  &
+              ! invariants, &
+              vmrcw,    &
+              vmr,      &
+              xphlwc,   &
+              aqso4,    &
+              aqh2so4,  &
+              aqso4_h2o2, &
+              aqso4_o3  &
+              )
 
 !   Tendency due to aqueous chemistry
     dvmrdt = (vmr - dvmrdt) / delt
