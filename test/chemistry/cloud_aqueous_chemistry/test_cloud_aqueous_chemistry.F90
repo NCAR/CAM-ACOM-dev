@@ -57,7 +57,8 @@ contains
     use spmd_utils, only: masterproc
     use physics_buffer, only: physics_buffer_desc
     use physics_types, only: physics_state
-    use cloud_aqueous_chemistry, only: sox_inti, setsox
+    use cloud_aqueous_chemistry, only: sox_inti => initialize, &
+                                       setsox => calculate
 
     type(chemistry_args), allocatable :: chem_args(:), expected_outputs(:)
     type(physics_buffer_desc), pointer :: pbuf(:)
@@ -111,7 +112,8 @@ contains
     use spmd_utils, only: masterproc
     use physics_buffer, only: physics_buffer_desc
     use physics_types, only: physics_state
-    use cloud_aqueous_chemistry, only: sox_inti, setsox
+    use cloud_aqueous_chemistry, only: sox_inti => initialize, &
+                                       setsox => calculate
 
     type(chemistry_args), allocatable :: chem_args(:), expected_outputs(:)
     type(physics_buffer_desc), pointer :: pbuf(:)
@@ -165,8 +167,8 @@ contains
     use spmd_utils, only: masterproc
     use physics_buffer, only: physics_buffer_desc
     use physics_types, only: physics_state
-    use cloud_aqueous_chemistry, only: new_sox_inti => sox_inti, &
-                                       new_setsox => setsox
+    use cloud_aqueous_chemistry, only: new_sox_inti => initialize, &
+                                       new_setsox => calculate
     use mo_setsox, only: old_sox_inti => sox_inti, old_setsox => setsox
 
     type(chemistry_args), allocatable :: new_args(:), old_args(:)
@@ -248,8 +250,8 @@ contains
     use spmd_utils, only: masterproc
     use physics_buffer, only: physics_buffer_desc
     use physics_types, only: physics_state
-    use cloud_aqueous_chemistry, only: new_sox_inti => sox_inti, &
-                                       new_setsox => setsox
+    use cloud_aqueous_chemistry, only: new_sox_inti => initialize, &
+                                       new_setsox => calculate
     use mo_setsox, only: old_sox_inti => sox_inti, old_setsox => setsox
 
     type(chemistry_args), allocatable :: new_args(:), old_args(:)

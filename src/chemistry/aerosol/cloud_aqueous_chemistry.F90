@@ -1,5 +1,13 @@
 !----------------------------------------------------------------------------------
 ! Cloud aqueous chemistry
+!
+! The purpose of this module is to calculate the sulfate formation due to various
+! oxidation/condensation pathways of cloud chemistry. These pathways include:
+! - SO2 oxidation by O3
+! - SO2 oxidation by H2O2
+! - H2SO4 condensation
+! Updated gas and aqueous species concentrations along with cloud pH changes are
+! calculated.
 !----------------------------------------------------------------------------------
 module cloud_aqueous_chemistry
 
@@ -14,25 +22,37 @@ module cloud_aqueous_chemistry
   implicit none
 
   private
-  public :: sox_inti, setsox
-  public :: has_sox
+  public :: initialize, calculate
+  public :: do_cloud_aqueous_chemistry
 
-  logical            ::  inv_o3
-  integer            ::  id_msa
+  logical :: do_cloud_aqueous_chemistry = .false.
 
-  integer :: id_so2, id_nh3, id_hno3, id_h2o2, id_o3, id_ho2
-  integer :: id_so4, id_h2so4
+  integer, parameter :: CLOUD_INDEX_UNDEFINED = -1
 
-  logical :: has_sox = .true.
-  logical :: inv_so2, inv_nh3, inv_hno3, inv_h2o2, inv_ox, inv_nh4no3, inv_ho2
+  ! Cloud chemistry species information
+  type :: cloud_species_t
+    logical :: is_constant_ = .false.
+    integer :: state_index_ = CLOUD_INDEX_UNDEFINED
+    character(len=:), allocatable :: name_
+  contains
+     procedure :: exists => cloud_species_exists
+     procedure :: mixing_ratio => cloud_species_get_mixing_ratio
+  end type cloud_species_t
 
+  interface cloud_species_t
+    module procedure :: cloud_species_constructor
+  end interface cloud_species_t
+
+  type(cloud_species_t) :: so2, nh3, hno3, h2o2, o3, ho2, msa, so4, h2so4
+
+  ! TODO: Figure out what this flag is for
   logical :: cloud_borne = .false.
 
 contains
 
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
-  subroutine sox_inti
+  subroutine initialize()
     !-----------------------------------------------------------------------
     !	... initialize the hetero sox routine
     !-----------------------------------------------------------------------
@@ -57,82 +77,42 @@ contains
     !       ... get species indicies
     !-----------------------------------------------------------------
 
+    so2 = cloud_species_t( 'SO2' )
+    nh3 = cloud_species_t( 'NH3' )
+    hno3 = cloud_species_t( 'HNO3' )
+    h2o2 = cloud_species_t( 'H2O2' )
+    o3 = cloud_species_t( 'O3' )
+    ho2 = cloud_species_t( 'HO2' )
+    msa = cloud_species_t( 'MSA' )
+    so4 = cloud_species_t( 'SO4' )
+    h2so4 = cloud_species_t( 'H2SO4' )
+
+    do_cloud_aqueous_chemistry = so2%exists() .and. h2o2%exists() .and. &
+                                 o3%exists() .and. ho2%exists()
     if (cloud_borne) then
-       id_h2so4 = get_spc_ndx( 'H2SO4' )
+       do_cloud_aqueous_chemistry = do_cloud_aqueous_chemistry .and. &
+              h2so4%exists()
     else
-       id_so4 = get_spc_ndx( 'SO4' )
-    endif
-    id_msa = get_spc_ndx( 'MSA' )
-
-    inv_so2 = .false.
-    id_so2 = get_inv_ndx( 'SO2' )
-    inv_so2 = id_so2 > 0
-    if ( .not. inv_so2 ) then
-       id_so2 = get_spc_ndx( 'SO2' )
-    endif
-
-    inv_NH3 = .false.
-    id_NH3 = get_inv_ndx( 'NH3' )
-    inv_NH3 = id_NH3 > 0
-    if ( .not. inv_NH3 ) then
-       id_NH3 = get_spc_ndx( 'NH3' )
-    endif
-
-    inv_HNO3 = .false.
-    id_HNO3 = get_inv_ndx( 'HNO3' )
-    inv_HNO3 = id_hno3 > 0
-    if ( .not. inv_HNO3 ) then
-       id_HNO3 = get_spc_ndx( 'HNO3' )
-    endif
-
-    inv_H2O2 = .false.
-    id_H2O2 = get_inv_ndx( 'H2O2' )
-    inv_H2O2 = id_H2O2 > 0
-    if ( .not. inv_H2O2 ) then
-       id_H2O2 = get_spc_ndx( 'H2O2' )
-    endif
-
-    inv_HO2 = .false.
-    id_HO2 = get_inv_ndx( 'HO2' )
-    inv_HO2 = id_HO2 > 0
-    if ( .not. inv_HO2 ) then
-       id_HO2 = get_spc_ndx( 'HO2' )
-    endif
-
-    inv_o3 = get_inv_ndx( 'O3' ) > 0
-    if (inv_o3) then
-       id_o3 = get_inv_ndx( 'O3' )
-    else
-       id_o3 = get_spc_ndx( 'O3' )
-    endif
-    inv_ho2 = get_inv_ndx( 'HO2' ) > 0
-    if (inv_ho2) then
-       id_ho2 = get_inv_ndx( 'HO2' )
-    else
-       id_ho2 = get_spc_ndx( 'HO2' )
-    endif
-
-    has_sox = (id_so2>0) .and. (id_h2o2>0) .and. (id_o3>0) .and. (id_ho2>0)
-    if (cloud_borne) then
-       has_sox = has_sox .and. (id_h2so4>0)
-    else
-       has_sox = has_sox .and. (id_so4>0) .and. (id_nh3>0)
+       do_cloud_aqueous_chemistry = do_cloud_aqueous_chemistry .and. &
+              so4%exists() .and. nh3%exists()
     endif
 
     if (masterproc) then
-       write(iulog,*) 'sox_inti: has_sox = ',has_sox
+       write(iulog,*) 'cloud_aqueous_chemistry_init: '//&
+                      'do_cloud_aqueous_chemistry = ',&
+                      do_cloud_aqueous_chemistry
     endif
 
-    if( has_sox ) then
+    if( do_cloud_aqueous_chemistry ) then
        if (masterproc) then
           write(iulog,*) '-----------------------------------------'
-          write(iulog,*) ' mo_setsox will do sox aerosols'
+          write(iulog,*) ' cloud aqueous chemistry is active'
           write(iulog,*) '-----------------------------------------'
        endif
     else
        if (masterproc) then
           write(iulog,*) '-----------------------------------------'
-          write(iulog,*) ' mo_setsox will not do sox aerosols'
+          write(iulog,*) ' cloud aqueous chemistry is inactive'
           write(iulog,*) '-----------------------------------------'
        endif
        return
@@ -140,11 +120,11 @@ contains
     
     call sox_cldaero_init()
 
-  end subroutine sox_inti
+  end subroutine initialize
 
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
-  subroutine setsox( state, &
+  subroutine calculate( state, &
        pbuf,   &
        ncol,   &
        lchnk,  &
@@ -335,57 +315,20 @@ contains
     xso4c => cldconc%so4c
     xnh4c => cldconc%nh4c
     xno3c => cldconc%no3c
-
     xso4(:,:) = 0._r8
     xno3(:,:) = 0._r8
     xnh4(:,:) = 0._r8
+    call so2%mixing_ratio(   qin, invariants, xhnm, xso2   )
+    call nh3%mixing_ratio(   qin, invariants, xhnm, xnh3   )
+    call hno3%mixing_ratio(  qin, invariants, xhnm, xhno3  )
+    call h2o2%mixing_ratio(  qin, invariants, xhnm, xh2o2  )
+    call o3%mixing_ratio(    qin, invariants, xhnm, xo3    )
+    call ho2%mixing_ratio(   qin, invariants, xhnm, xho2   )
+    call msa%mixing_ratio(   qin, invariants, xhnm, xmsa   )
+    call so4%mixing_ratio(   qin, invariants, xhnm, xso4   )
+    call h2so4%mixing_ratio( qin, invariants, xhnm, xh2so4 )
 
-    do k = 1,pver
-       xph(:,k) = xph0                                ! initial PH value
-
-       if ( inv_so2 ) then
-          xso2 (:,k) = invariants(:,k,id_so2)/xhnm(:,k)  ! mixing ratio
-       else
-          xso2 (:,k) = qin(:,k,id_so2)                   ! mixing ratio
-       endif
-
-       if (id_hno3 > 0) then
-          xhno3(:,k) = qin(:,k,id_hno3)
-       else
-          xhno3(:,k) = 0.0_r8
-       endif
-
-       if ( inv_h2o2 ) then
-          xh2o2 (:,k) = invariants(:,k,id_h2o2)/xhnm(:,k)  ! mixing ratio
-       else
-          xh2o2 (:,k) = qin(:,k,id_h2o2)                   ! mixing ratio
-       endif
-
-       if (id_nh3  > 0) then
-          xnh3 (:,k) = qin(:,k,id_nh3)
-       else
-          xnh3 (:,k) = 0.0_r8
-       endif
-
-       if ( inv_o3 ) then
-          xo3  (:,k) = invariants(:,k,id_o3)/xhnm(:,k) ! mixing ratio
-       else
-          xo3  (:,k) = qin(:,k,id_o3)                  ! mixing ratio
-       endif
-       if ( inv_ho2 ) then
-          xho2 (:,k) = invariants(:,k,id_ho2)/xhnm(:,k)! mixing ratio
-       else
-          xho2 (:,k) = qin(:,k,id_ho2)                 ! mixing ratio
-       endif
-
-       if (cloud_borne) then
-          xh2so4(:,k) = qin(:,k,id_h2so4)
-       else
-          xso4  (:,k) = qin(:,k,id_so4) ! mixing ratio
-       endif
-       if (id_msa > 0) xmsa (:,k) = qin(:,k,id_msa)
-
-    end do
+    xph(:,:) = xph0                                ! initial PH value
 
     !-----------------------------------------------------------------
     !       ... Temperature dependent Henry constants
@@ -750,7 +693,7 @@ contains
           !         ... nh3
           !------------------------------------------------------------------------
           px = henh3(i,k) * Ra * tz * xl
-          if (id_nh3>0) then
+          if (nh3%exists()) then
              nh3g(i,k) = (xnh3(i,k)+xnh4(i,k))/(1._r8+ px)
           else
              nh3g(i,k) = 0._r8
@@ -896,7 +839,71 @@ contains
 
     call sox_cldaero_destroy_obj(cldconc)
 
-  end subroutine setsox
+  end subroutine calculate
+
+!-------------------------------------------------------------------------------
+!
+! Support routines to be moved to separate modules
+!
+!-------------------------------------------------------------------------------
+
+   !-------------------------------------------------------------------------------
+   ! Creates a cloud species object with state indices
+   function cloud_species_constructor( species_name ) result( this )
+   
+      use mo_chem_utls, only : get_spc_ndx, get_inv_ndx
+   
+      type(cloud_species_t) :: this
+      character(len=*), intent(in) :: species_name
+   
+      this%name_ = species_name
+      this%state_index_ = get_inv_ndx( species_name )
+      this%is_constant_ = this%state_index_ > 0
+      if ( .not. this%is_constant_ ) &
+          this%state_index_ = get_spc_ndx( species_name )
+      if ( this%state_index_ <= 0 ) this%state_index_ = CLOUD_INDEX_UNDEFINED
+   
+   end function cloud_species_constructor
+
+   !-------------------------------------------------------------------------------
+   ! Returns whether a cloud species is defined
+   logical function cloud_species_exists( this )
+   
+      class(cloud_species_t), intent(in) :: this
+   
+      cloud_species_exists = this%state_index_ .ne. CLOUD_INDEX_UNDEFINED
+   
+   end function cloud_species_exists
+
+   !-------------------------------------------------------------------------------
+   ! Returns the mixing ratio for a cloud species
+   !
+   ! Constant species use the fixed number concentration and the air density
+   ! to calculate the mixing ratio. Time-varying species simply return the
+   ! mixing ratio from the state array.
+   !
+   ! For species that are not defined, the mixing ratio is set to zero.
+   subroutine cloud_species_get_mixing_ratio( this, mixing_ratios, &
+       fixed_concentrations, air_density, mixing_ratio )
+
+      class(cloud_species_t), intent(in) :: this
+      real(r8), intent(in)  :: mixing_ratios(:,:,:)        ! all mixing ratios (kg kg-1) [column, layer, species]
+      real(r8), intent(in)  :: fixed_concentrations(:,:,:) ! all fixed concentrations (kg m-3) [column, layer, species]
+      real(r8), intent(in)  :: air_density(:,:)            ! air density (kg m-3) [column, layer]
+      real(r8), intent(out) :: mixing_ratio(:,:)           ! species mixing ratio (kg kg-1) [column, layer]
+      
+      if ( this%state_index_ == CLOUD_INDEX_UNDEFINED ) then
+         mixing_ratio(:,:) = 0._r8
+         return
+      end if
+      if ( this%is_constant_ ) then
+         mixing_ratio(:,:) = fixed_concentrations(:,:,this%state_index_) &
+                             / air_density(:,:)
+      else
+         mixing_ratio(:,:) = mixing_ratios(:,:,this%state_index_)
+      end if
+
+   end subroutine cloud_species_get_mixing_ratio
 
 end module cloud_aqueous_chemistry
 
