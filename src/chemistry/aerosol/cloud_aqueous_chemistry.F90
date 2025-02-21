@@ -124,31 +124,31 @@ contains
 
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
-  subroutine calculate( state, &
-       pbuf,   &
-       ncol,   &
-       lchnk,  &
-       loffset,&
-       dtime,  &
-       press,  &
-       pdel,   &
-       tfld,   &
-       mbar,   &
-       lwc,    &
-       cldfrc, &
-       cldnum, &
-       xhnm,   &
-       invariants, &
-       qcw,    &
-       qin,    &
-       xphlwc, &
-       aqso4,  &
-       aqh2so4,&
-       aqso4_h2o2, &
-       aqso4_o3,   &
-       yph_in,  &
-       aqso4_h2o2_3d, &
-       aqso4_o3_3d &
+  subroutine calculate( state,         &
+       pbuf,                           &
+       ncol,                           &
+       lchnk,                          &
+       loffset,                        &
+       time_step,                      &
+       midpoint_pressure,              &
+       pressure_thickness,             &
+       temperature,                    &
+       mean_mass,                      &
+       cloud_water,                    &
+       cloud_fraction,                 &
+       cloud_droplet_number,           &
+       atmospheric_number_density,     &
+       fixed_concentrations,           &
+       cloud_borne_aerosol_vmr,        &
+       species_vmr,                    &
+       ph_times_cloud_water,           &
+       aq_so4_production,              &
+       aq_h2so4_production,            &
+       aq_so4_production_from_h2o2,    &
+       aq_so4_production_from_o3,      &
+       specified_ph,                   &
+       aq_so4_production_from_h2o2_3d, &
+       aq_so4_production_from_o3_3d    &
        )
 
     !-----------------------------------------------------------------------
@@ -172,10 +172,12 @@ contains
     use physconst,       only : mwdry, gravit
     use mo_constants,    only : pi
 #ifdef USE_MAM
-    use mam_clouds,      only : sox_cldaero_update, sox_cldaero_create_obj, sox_cldaero_destroy_obj
+    use mam_clouds,      only : sox_cldaero_update, sox_cldaero_create_obj, &
+                                sox_cldaero_destroy_obj
 #endif
 #ifdef USE_CARMA
-    use carma_clouds,    only : sox_cldaero_update, sox_cldaero_create_obj, sox_cldaero_destroy_obj
+    use carma_clouds,    only : sox_cldaero_update, sox_cldaero_create_obj, &
+                                sox_cldaero_destroy_obj
 #endif
     use cloud_utilities, only : cldaero_conc_t
 
@@ -183,30 +185,30 @@ contains
     !-----------------------------------------------------------------------
     !      ... Dummy arguments
     !-----------------------------------------------------------------------
-    integer,          intent(in)    :: ncol              ! num of columns in chunk
-    integer,          intent(in)    :: lchnk             ! chunk id
-    integer,          intent(in)    :: loffset           ! offset of chem tracers in the advected tracers array
-    real(r8),         intent(in)    :: dtime             ! time step (sec)
-    real(r8),         intent(in)    :: press(:,:)        ! midpoint pressure ( Pa )
-    real(r8),         intent(in)    :: pdel(:,:)         ! pressure thickness of levels (Pa)
-    real(r8),         intent(in)    :: tfld(:,:)         ! temperature
-    real(r8),         intent(in)    :: mbar(:,:)         ! mean wet atmospheric mass ( amu )
-    real(r8), target, intent(in)    :: lwc(:,:)          ! cloud liquid water content (kg/kg)
-    real(r8), target, intent(in)    :: cldfrc(:,:)       ! cloud fraction
-    real(r8),         intent(in)    :: cldnum(:,:)       ! droplet number concentration (#/kg)
-    real(r8),         intent(in)    :: xhnm(:,:)         ! total atms density ( /cm**3)
-    real(r8),         intent(in)    :: invariants(:,:,:)
-    real(r8), target, intent(inout) :: qcw(:,:,:)        ! cloud-borne aerosol (vmr)
-    real(r8),         intent(inout) :: qin(:,:,:)        ! transported species ( vmr )
-    real(r8),         intent(out)   :: xphlwc(:,:)       ! pH value multiplied by lwc
+    integer,          intent(in)    :: ncol                            ! num of columns in chunk
+    integer,          intent(in)    :: lchnk                           ! chunk id
+    integer,          intent(in)    :: loffset                         ! offset of chem tracers in the advected tracers array
+    real(r8),         intent(in)    :: time_step                       ! time step (sec)
+    real(r8),         intent(in)    :: midpoint_pressure(:,:)          ! midpoint pressure ( Pa )
+    real(r8),         intent(in)    :: pressure_thickness(:,:)         ! pressure thickness of levels (Pa)
+    real(r8),         intent(in)    :: temperature(:,:)                ! temperature (K) [tfld elsewhere in CAM]
+    real(r8),         intent(in)    :: mean_mass(:,:)                  ! mean wet atmospheric mass ( amu )
+    real(r8), target, intent(in)    :: cloud_water(:,:)                ! cloud liquid water content (kg/kg)
+    real(r8), target, intent(in)    :: cloud_fraction(:,:)             ! cloud fraction (unitless)
+    real(r8),         intent(in)    :: cloud_droplet_number(:,:)       ! droplet number concentration (#/kg)
+    real(r8),         intent(in)    :: atmospheric_number_density(:,:) ! total atmospheric number density (/cm**3)
+    real(r8),         intent(in)    :: fixed_concentrations(:,:,:)     ! fixed concentrations (/cm**3)
+    real(r8), target, intent(inout) :: cloud_borne_aerosol_vmr(:,:,:)  ! cloud-borne aerosol (vmr) mol/mol = m3/m3
+    real(r8),         intent(inout) :: species_vmr(:,:,:)              ! transported species (vmr) mol/mol = m3/m3
+    real(r8),         intent(out)   :: ph_times_cloud_water(:,:)       ! pH value multiplied by lwc
 
-    real(r8),         intent(out)   :: aqso4(:,:)                   ! aqueous phase chemistry
-    real(r8),         intent(out)   :: aqh2so4(:,:)                 ! aqueous phase chemistry
-    real(r8),         intent(out)   :: aqso4_h2o2(:)                ! SO4 aqueous phase chemistry due to H2O2 (kg/m2)
-    real(r8),         intent(out)   :: aqso4_o3(:)                  ! SO4 aqueous phase chemistry due to O3 (kg/m2)
-    real(r8),         intent(in), optional :: yph_in                ! ph value
-    real(r8),         intent(out), optional :: aqso4_h2o2_3d(:, :)  ! 3D SO4 aqueous phase chemistry due to H2O2 (kg/m2)
-    real(r8),         intent(out), optional :: aqso4_o3_3d(:, :)    ! 3D SO4 aqueous phase chemistry due to O3 (kg/m2)
+    real(r8),         intent(out)   :: aq_so4_production(:,:)         ! aqueous phase production of SO4 (kg/m2/s)
+    real(r8),         intent(out)   :: aq_h2so4_production(:,:)       ! aqueous phase production of H2SO4 (kg/m2/s)
+    real(r8),         intent(out)   :: aq_so4_production_from_h2o2(:) ! SO4 aqueous phase production due to H2O2 (kg/m2/s)
+    real(r8),         intent(out)   :: aq_so4_production_from_o3(:)   ! SO4 aqueous phase production due to O3 (kg/m2/s)
+    real(r8),         intent(in),  optional :: specified_ph                         ! specified pH value. If present, this value will be used instead of calculated pH
+    real(r8),         intent(out), optional :: aq_so4_production_from_h2o2_3d(:, :) ! 3D SO4 aqueous phase production due to H2O2 (kg/m2/s)
+    real(r8),         intent(out), optional :: aq_so4_production_from_o3_3d(:, :)   ! 3D SO4 aqueous phase production due to O3 (kg/m2/s)
 
     type(physics_state),    intent(in)    :: state     ! Physics state variables
 
@@ -305,28 +307,29 @@ contains
     xph0 = 10._r8**(-ph0)                      ! initial PH value
 
     do k = 1,pver
-       cfact(:,k) = xhnm(:,k)     &          ! /cm3(a)
+       cfact(:,k) = atmospheric_number_density(:,k)     &          ! /cm3(a)
             * 1.e6_r8             &          ! /m3(a)
             * 1.38e-23_r8/287._r8 &          ! Kg(a)/m3(a)
             * 1.e-3_r8                       ! Kg(a)/L(a)
     end do
 
-    cldconc => sox_cldaero_create_obj( cldfrc,qcw,lwc, cfact, ncol, loffset )
+    cldconc => sox_cldaero_create_obj( cloud_fraction, cloud_borne_aerosol_vmr, &
+                                       cloud_water, cfact, ncol, loffset )
     xso4c => cldconc%so4c
     xnh4c => cldconc%nh4c
     xno3c => cldconc%no3c
     xso4(:,:) = 0._r8
     xno3(:,:) = 0._r8
     xnh4(:,:) = 0._r8
-    call so2%mixing_ratio(   qin, invariants, xhnm, xso2   )
-    call nh3%mixing_ratio(   qin, invariants, xhnm, xnh3   )
-    call hno3%mixing_ratio(  qin, invariants, xhnm, xhno3  )
-    call h2o2%mixing_ratio(  qin, invariants, xhnm, xh2o2  )
-    call o3%mixing_ratio(    qin, invariants, xhnm, xo3    )
-    call ho2%mixing_ratio(   qin, invariants, xhnm, xho2   )
-    call msa%mixing_ratio(   qin, invariants, xhnm, xmsa   )
-    call so4%mixing_ratio(   qin, invariants, xhnm, xso4   )
-    call h2so4%mixing_ratio( qin, invariants, xhnm, xh2so4 )
+    call so2%mixing_ratio(   species_vmr, fixed_concentrations, atmospheric_number_density, xso2   )
+    call nh3%mixing_ratio(   species_vmr, fixed_concentrations, atmospheric_number_density, xnh3   )
+    call hno3%mixing_ratio(  species_vmr, fixed_concentrations, atmospheric_number_density, xhno3  )
+    call h2o2%mixing_ratio(  species_vmr, fixed_concentrations, atmospheric_number_density, xh2o2  )
+    call o3%mixing_ratio(    species_vmr, fixed_concentrations, atmospheric_number_density, xo3    )
+    call ho2%mixing_ratio(   species_vmr, fixed_concentrations, atmospheric_number_density, xho2   )
+    call msa%mixing_ratio(   species_vmr, fixed_concentrations, atmospheric_number_density, xmsa   )
+    call so4%mixing_ratio(   species_vmr, fixed_concentrations, atmospheric_number_density, xso4   )
+    call h2so4%mixing_ratio( species_vmr, fixed_concentrations, atmospheric_number_density, xh2so4 )
 
     xph(:,:) = xph0                                ! initial PH value
 
@@ -336,15 +339,15 @@ contains
     ver_loop0: do k = 1,pver                               !! pver loop for STEP 0
        col_loop0: do i = 1,ncol
 
-          if (cloud_borne .and. cldfrc(i,k)>0._r8) then
-             xso4(i,k) = xso4c(i,k) / cldfrc(i,k)
-             xnh4(i,k) = xnh4c(i,k) / cldfrc(i,k)
-             xno3(i,k) = xno3c(i,k) / cldfrc(i,k)
+          if (cloud_borne .and. cloud_fraction(i,k)>0._r8) then
+             xso4(i,k) = xso4c(i,k) / cloud_fraction(i,k)
+             xnh4(i,k) = xnh4c(i,k) / cloud_fraction(i,k)
+             xno3(i,k) = xno3c(i,k) / cloud_fraction(i,k)
           endif
           xl = cldconc%xlwc(i,k)
 
           if( xl >= 1.e-8_r8 ) then
-             work1(i) = 1._r8 / tfld(i,k) - 1._r8 / 298._r8
+             work1(i) = 1._r8 / temperature(i,k) - 1._r8 / 298._r8
 
              !-----------------------------------------------------------------
              ! 21-mar-2011 changes by rce
@@ -360,10 +363,10 @@ contains
              !-----------------------------------------------------------------
 
              !-----------------------------------------------------------------
-             pz = .01_r8*press(i,k)       !! pressure in mb
-             tz = tfld(i,k)
+             pz = .01_r8*midpoint_pressure(i,k)       !! pressure in mb
+             tz = temperature(i,k)
              patm = pz/1013._r8
-             xam  = press(i,k)/(1.38e-23_r8*tz)  !air density /M3
+             xam  = midpoint_pressure(i,k)/(1.38e-23_r8*tz)  !air density /M3
 
              !-----------------------------------------------------------------
              !        ... hno3
@@ -453,7 +456,7 @@ contains
              !-----------------------------------------------------------------
              !         ... so4 effect
              !-----------------------------------------------------------------
-             Eso4 = xso4(i,k)*xhnm(i,k)   &         ! /cm3(a)
+             Eso4 = xso4(i,k)*atmospheric_number_density(i,k)   &         ! /cm3(a)
                   *const0/xl
 
 
@@ -469,7 +472,7 @@ contains
              !-----------------------------------------------------------------
              do iter = 1,itermax
 
-                if (.not. present(yph_in)) then
+                if (.not. present(specified_ph)) then
                    if (iter == 1) then
                       ! 1st iteration ph = lower bound value
                       yph_lo = 2.0_r8
@@ -484,7 +487,7 @@ contains
                       yph = 0.5_r8*(yph_lo + yph_hi)
                    end if
                 else
-                   yph = yph_in
+                   yph = specified_ph
                 end if
 
                 ! calc current [H+] from ph
@@ -594,13 +597,13 @@ contains
     !==============================================================
     ver_loop1: do k = 1,pver
        col_loop1: do i = 1,ncol
-          work1(i) = 1._r8 / tfld(i,k) - 1._r8 / 298._r8
-          tz = tfld(i,k)
+          work1(i) = 1._r8 / temperature(i,k) - 1._r8 / 298._r8
+          tz = temperature(i,k)
 
           xl = cldconc%xlwc(i,k)
 
-          patm = press(i,k)/101300._r8        ! press is in pascal
-          xam  = press(i,k)/(1.38e-23_r8*tz)  ! air density /M3
+          patm = midpoint_pressure(i,k)/101300._r8        ! press is in pascal
+          xam  = midpoint_pressure(i,k)/(1.38e-23_r8*tz)  ! air density /M3
 
           !-----------------------------------------------------------------------
           !        ... hno3
@@ -658,7 +661,7 @@ contains
           endif
 
           if ( .not. cloud_borne) then    ! this seems to be specific to aerosols that are not cloud borne
-             xh2o2(i,k) = xh2o2(i,k) + r2h2o2*dtime         ! updated h2o2 by het production
+             xh2o2(i,k) = xh2o2(i,k) + r2h2o2*time_step         ! updated h2o2 by het production
           endif
 
           !-----------------------------------------------
@@ -755,10 +758,10 @@ contains
              pso4 = pso4 & ! [M/s] = [mole/L(w)/s]
                   * xl & ! [mole/L(a)/s]
                   / const0 & ! [/L(a)/s]
-                  / xhnm(i,k)
+                  / atmospheric_number_density(i,k)
 
 
-             ccc = pso4*dtime
+             ccc = pso4*time_step
              ccc = max(ccc, 1.e-30_r8)
 
              xso4_init(i,k)=xso4(i,k)
@@ -803,9 +806,9 @@ contains
              pso4 = pso4        &                                ! [M/s] =  [mole/L(w)/s]
                   * xl          &                                ! [mole/L(a)/s]
                   / const0      &                                ! [/L(a)/s]
-                  / xhnm(i,k)                                    ! [mixing ratio/s]
+                  / atmospheric_number_density(i,k)                                    ! [mixing ratio/s]
 
-             ccc = pso4*dtime
+             ccc = pso4*time_step
              ccc = max(ccc, 1.e-30_r8)
 
              xso4_init(i,k)=xso4(i,k)
@@ -824,15 +827,15 @@ contains
     end do ver_loop1
 
     call sox_cldaero_update( state, &
-          pbuf, ncol, lchnk, loffset, dtime, mbar, pdel, press, tfld, cldnum, cldfrc, cfact, cldconc%xlwc, &
-          xdelso4hp, xh2so4, xso4, xso4_init, nh3g, hno3g, xnh3, xhno3, xnh4c,  xno3c, xmsa, xso2, xh2o2, qcw, qin, &
-          aqso4, aqh2so4, aqso4_h2o2, aqso4_o3, aqso4_h2o2_3d=aqso4_h2o2_3d, aqso4_o3_3d=aqso4_o3_3d )
+          pbuf, ncol, lchnk, loffset, time_step, mean_mass, pressure_thickness, midpoint_pressure, temperature, cloud_droplet_number, cloud_fraction, cfact, cldconc%xlwc, &
+          xdelso4hp, xh2so4, xso4, xso4_init, nh3g, hno3g, xnh3, xhno3, xnh4c,  xno3c, xmsa, xso2, xh2o2, cloud_borne_aerosol_vmr, species_vmr, &
+          aq_so4_production, aq_h2so4_production, aq_so4_production_from_h2o2, aq_so4_production_from_o3, aqso4_h2o2_3d=aq_so4_production_from_h2o2_3d, aqso4_o3_3d=aq_so4_production_from_o3_3d )
 
-    xphlwc(:,:) = 0._r8
+    ph_times_cloud_water(:,:) = 0._r8
     do k = 1, pver
        do i = 1, ncol
-          if (cldfrc(i,k)>=1.e-5_r8 .and. lwc(i,k)>=1.e-8_r8) then
-             xphlwc(i,k) = -1._r8*log10(xph(i,k)) * lwc(i,k)
+          if (cloud_fraction(i,k)>=1.e-5_r8 .and. cloud_water(i,k)>=1.e-8_r8) then
+             ph_times_cloud_water(i,k) = -1._r8*log10(xph(i,k)) * cloud_water(i,k)
           endif
        end do
     end do
@@ -887,10 +890,10 @@ contains
        fixed_concentrations, air_density, mixing_ratio )
 
       class(cloud_species_t), intent(in) :: this
-      real(r8), intent(in)  :: mixing_ratios(:,:,:)        ! all mixing ratios (kg kg-1) [column, layer, species]
-      real(r8), intent(in)  :: fixed_concentrations(:,:,:) ! all fixed concentrations (kg m-3) [column, layer, species]
-      real(r8), intent(in)  :: air_density(:,:)            ! air density (kg m-3) [column, layer]
-      real(r8), intent(out) :: mixing_ratio(:,:)           ! species mixing ratio (kg kg-1) [column, layer]
+      real(r8), intent(in)  :: mixing_ratios(:,:,:)        ! all mixing ratios (mol mol-1) [column, layer, species]
+      real(r8), intent(in)  :: fixed_concentrations(:,:,:) ! all fixed concentrations (# cm-3) [column, layer, species]
+      real(r8), intent(in)  :: air_density(:,:)            ! air density (# cm-3) [column, layer]
+      real(r8), intent(out) :: mixing_ratio(:,:)           ! species mixing ratio (mol mol-1) [column, layer]
       
       if ( this%state_index_ == CLOUD_INDEX_UNDEFINED ) then
          mixing_ratio(:,:) = 0._r8
