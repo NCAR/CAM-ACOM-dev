@@ -48,6 +48,11 @@ module cloud_aqueous_chemistry
   ! TODO: Figure out what this flag is for
   logical :: cloud_borne = .false.
 
+  ! Constants that should be moved to a common module
+  real(r8), parameter :: AVOGADRO = 6.02214129e23_r8
+  real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8
+  real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314.46261815324_r8*PASCAL_TO_ATM
+
 contains
 
 !-----------------------------------------------------------------------
@@ -219,24 +224,15 @@ contains
     !
     !           xhno3 ... in mixing ratio
     !-----------------------------------------------------------------------
-    integer,  parameter :: itermax = 20
+    integer,  parameter :: max_iterations = 20
     real(r8), parameter :: ph0 = 5.0_r8  ! INITIAL PH VALUES
-    real(r8), parameter :: const0 = 1.e3_r8/6.023e23_r8
-    real(r8), parameter :: xa0 = 11._r8
-    real(r8), parameter :: xb0 = -.1_r8
-    real(r8), parameter :: xa1 = 1.053_r8
-    real(r8), parameter :: xb1 = -4.368_r8
-    real(r8), parameter :: xa2 = 1.016_r8
-    real(r8), parameter :: xb2 = -2.54_r8
-    real(r8), parameter :: xa3 = .816e-32_r8
-    real(r8), parameter :: xb3 = .259_r8
+    real(r8), parameter :: const0 = 1.e3_r8/AVOGADRO
 
     real(r8), parameter :: kh0 = 9.e3_r8            ! HO2(g)          -> Ho2(a)
     real(r8), parameter :: kh1 = 2.05e-5_r8         ! HO2(a)          -> H+ + O2-
     real(r8), parameter :: kh2 = 8.6e5_r8           ! HO2(a) + ho2(a) -> h2o2(a) + o2
     real(r8), parameter :: kh3 = 1.e8_r8            ! HO2(a) + o2-    -> h2o2(a) + o2
-    real(r8), parameter :: Ra = 8314._r8/101325._r8 ! universal constant   (atm)/(M-K)
-    real(r8), parameter :: xkw = 1.e-14_r8          ! water acidity
+    real(r8), parameter :: hplus_scaling_factor = 1.e-14_r8 ! [H+] (mol/L) for pH=14
 
     !
     real(r8) :: xdelso4hp(ncol,pver)
@@ -263,17 +259,14 @@ contains
     real(r8) :: r1h2o2 ! prod(h2o2) by ho2 in mole/L(w)/s
     real(r8) :: r2h2o2 ! prod(h2o2) by ho2 in mix/s
 
-    real(r8), dimension(ncol,pver)  ::             &
-         xhno3, xh2o2, xso2, xso4, xno3, &
-         xnh3, xnh4, xo3,         &
-         cfact, &
-         xph, xho2,         &
-         xh2so4, xmsa, xso4_init, &
-         hehno3, &            ! henry law const for hno3
-         heh2o2, &            ! henry law const for h2o2
-         heso2,  &            ! henry law const for so2
-         henh3,  &            ! henry law const for nh3
-         heo3              !!,   &            ! henry law const for o3
+    ! volume mixing ratios for cloud chemistry species
+    real(r8), dimension(ncol,pver) ::  xhno3, xh2o2, xso2, xso4, xno3, &
+         xnh3, xnh4, xo3, xph, xho2, xh2so4, xmsa, xso4_init
+
+    real(r8), dimension(ncol,pver) :: cfact ! TODO: what is this?
+    
+    ! Effective Henry's Law constants
+    real(r8), dimension(ncol,pver) :: hehno3, heh2o2, heso2, henh3, heo3
 
     real(r8) :: patm_x
 
@@ -373,7 +366,7 @@ contains
              !-----------------------------------------------------------------
              ! previous code
              !    hehno3(i,k)  = xk*(1._r8 + xe/xph(i,k))
-             !    px = hehno3(i,k) * Ra * tz * xl
+             !    px = hehno3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
              !    hno3g = xhno3(i,k)/(1._r8 + px)
              !    Ehno3 = xk*xe*hno3g *patm
              ! equivalent new code
@@ -388,7 +381,7 @@ contains
              xk = 2.1e5_r8 *EXP( 8700._r8*work1(i) )
              xe = 15.4_r8
              fact1_hno3 = xk*xe*patm*xhno3(i,k)
-             fact2_hno3 = xk*ra*tz*xl
+             fact2_hno3 = xk*GAS_CONSTANT_L_ATM_MOL_K*tz*xl
              fact3_hno3 = xe
 
              !-----------------------------------------------------------------
@@ -396,7 +389,7 @@ contains
              !-----------------------------------------------------------------
              ! previous code
              !    heso2(i,k)  = xk*(1._r8 + wrk*(1._r8 + x2/xph(i,k)))
-             !    px = heso2(i,k) * Ra * tz * xl
+             !    px = heso2(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
              !    so2g =  xso2(i,k)/(1._r8+ px)
              !    Eso2 = xk*xe*so2g *patm
              ! equivalent new code
@@ -412,7 +405,7 @@ contains
              xe = 1.7e-2_r8*EXP( 2090._r8*work1(i) )
              x2 = 6.0e-8_r8*EXP( 1120._r8*work1(i) )
              fact1_so2 = xk*xe*patm*xso2(i,k)
-             fact2_so2 = xk*ra*tz*xl
+             fact2_so2 = xk*GAS_CONSTANT_L_ATM_MOL_K*tz*xl
              fact3_so2 = xe
              fact4_so2 = x2
 
@@ -420,30 +413,30 @@ contains
              !          ... nh3
              !-----------------------------------------------------------------
              ! previous code
-             !    henh3(i,k)  = xk*(1._r8 + xe*xph(i,k)/xkw)
-             !    px = henh3(i,k) * Ra * tz * xl
+             !    henh3(i,k)  = xk*(1._r8 + xe*xph(i,k)/hplus_scaling_factor)
+             !    px = henh3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
              !    nh3g = (xnh3(i,k)+xnh4(i,k))/(1._r8+ px)
-             !    Enh3 = xk*xe*nh3g/xkw *patm
+             !    Enh3 = xk*xe*nh3g/hplus_scaling_factor *patm
              ! equivalent new code
-             !    henh3 = xk + xk*xe*hplus/xkw
+             !    henh3 = xk + xk*xe*hplus/hplus_scaling_factor
              !    nh3g = xnh34/(1 + px)
              !         = xnh34/(1 + henh3*ra*tz*xl)
-             !         = xnh34/(1 + xk*ra*tz*xl*(1 + xe*hplus/xkw)
-             !    enh3 = nh3g*xk*xe*patm/xkw
-             !          = ((xk*xe*patm/xkw)*xnh34)/(1 + xk*ra*tz*xl*(1 + xe*hplus/xkw)
+             !         = xnh34/(1 + xk*ra*tz*xl*(1 + xe*hplus/hplus_scaling_factor)
+             !    enh3 = nh3g*xk*xe*patm/hplus_scaling_factor
+             !          = ((xk*xe*patm/hplus_scaling_factor)*xnh34)/(1 + xk*ra*tz*xl*(1 + xe*hplus/hplus_scaling_factor)
              !          = ( fact1_nh3            )/(1 + fact2_nh3  *(1 + fact3_nh3*hplus)
              !    [nh4+] = enh3*hplus
              xk = 58._r8   *EXP( 4085._r8*work1(i) )
              xe = 1.7e-5_r8*EXP( -4325._r8*work1(i) )
 
-             fact1_nh3 = (xk*xe*patm/xkw)*(xnh3(i,k)+xnh4(i,k))
-             fact2_nh3 = xk*ra*tz*xl
-             fact3_nh3 = xe/xkw
+             fact1_nh3 = (xk*xe*patm/hplus_scaling_factor)*(xnh3(i,k)+xnh4(i,k))
+             fact2_nh3 = xk*GAS_CONSTANT_L_ATM_MOL_K*tz*xl
+             fact3_nh3 = xe/hplus_scaling_factor
 
              !-----------------------------------------------------------------
              !        ... h2o effects
              !-----------------------------------------------------------------
-             Eh2o = xkw
+             Eh2o = hplus_scaling_factor
 
              !-----------------------------------------------------------------
              !        ... co2 effects
@@ -470,7 +463,7 @@ contains
              !    yposnet_lo and yposnet_hi = net positive ions for
              !       yph_lo and yph_hi
              !-----------------------------------------------------------------
-             do iter = 1,itermax
+             do iter = 1, max_iterations
 
                 if (.not. present(specified_ph)) then
                    if (iter == 1) then
@@ -634,7 +627,7 @@ contains
           !-----------------------------------------------------------------
           xk = 58._r8   *EXP( 4085._r8*work1(i) )
           xe = 1.7e-5_r8*EXP(-4325._r8*work1(i) )
-          henh3(i,k)  = xk*(1._r8 + xe*xph(i,k)/xkw)
+          henh3(i,k)  = xk*(1._r8 + xe*xph(i,k)/hplus_scaling_factor)
 
           !-----------------------------------------------------------------
           !        ... o3
@@ -671,31 +664,31 @@ contains
           !-----------------------------------------------------------------
           !        ... hno3
           !-----------------------------------------------------------------
-          px = hehno3(i,k) * Ra * tz * xl
+          px = hehno3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
           hno3g(i,k) = (xhno3(i,k)+xno3(i,k))/(1._r8 + px)
 
           !------------------------------------------------------------------------
           !        ... h2o2
           !------------------------------------------------------------------------
-          px = heh2o2(i,k) * Ra * tz * xl
+          px = heh2o2(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
           h2o2g =  xh2o2(i,k)/(1._r8+ px)
 
           !------------------------------------------------------------------------
           !         ... so2
           !------------------------------------------------------------------------
-          px = heso2(i,k) * Ra * tz * xl
+          px = heso2(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
           so2g =  xso2(i,k)/(1._r8+ px)
 
           !------------------------------------------------------------------------
           !         ... o3
           !------------------------------------------------------------------------
-          px = heo3(i,k) * Ra * tz * xl
+          px = heo3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
           o3g =  xo3(i,k)/(1._r8+ px)
 
           !------------------------------------------------------------------------
           !         ... nh3
           !------------------------------------------------------------------------
-          px = henh3(i,k) * Ra * tz * xl
+          px = henh3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
           if (nh3%exists()) then
              nh3g(i,k) = (xnh3(i,k)+xnh4(i,k))/(1._r8+ px)
           else
