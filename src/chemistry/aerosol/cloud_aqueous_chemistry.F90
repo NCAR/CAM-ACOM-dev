@@ -49,9 +49,10 @@ module cloud_aqueous_chemistry
   logical :: cloud_borne = .false.
 
   ! Constants that should be moved to a common module
-  real(r8), parameter :: AVOGADRO = 6.02214129e23_r8
+  real(r8), parameter :: AVOGADRO = 6.02214129e23_r8 ! mol-1
   real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8
   real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314.46261815324_r8*PASCAL_TO_ATM
+  real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8 ! J K-1
 
 contains
 
@@ -202,10 +203,10 @@ contains
     real(r8), target, intent(in)    :: cloud_fraction(:,:)             ! cloud fraction (unitless)
     real(r8),         intent(in)    :: cloud_droplet_number(:,:)       ! droplet number concentration (#/kg)
     real(r8),         intent(in)    :: atmospheric_number_density(:,:) ! total atmospheric number density (/cm**3)
-    real(r8),         intent(in)    :: fixed_concentrations(:,:,:)     ! fixed concentrations (/cm**3)
-    real(r8), target, intent(inout) :: cloud_borne_aerosol_vmr(:,:,:)  ! cloud-borne aerosol (vmr) mol/mol = m3/m3
-    real(r8),         intent(inout) :: species_vmr(:,:,:)              ! transported species (vmr) mol/mol = m3/m3
-    real(r8),         intent(out)   :: ph_times_cloud_water(:,:)       ! pH value multiplied by lwc
+    real(r8),         intent(in)    :: fixed_concentrations(:,:,:)     ! fixed concentrations (/cm**3) [invariants elsewhere in CAM]
+    real(r8), target, intent(inout) :: cloud_borne_aerosol_vmr(:,:,:)  ! cloud-borne aerosol (vmr) mol/mol = m3/m3 [qcw elsewhere in CAM]
+    real(r8),         intent(inout) :: species_vmr(:,:,:)              ! transported species (vmr) mol/mol = m3/m3 [qin elsewhere in CAM]
+    real(r8),         intent(out)   :: ph_times_cloud_water(:,:)       ! pH value multiplied by cloud liquid water content
 
     real(r8),         intent(out)   :: aq_so4_production(:,:)         ! aqueous phase production of SO4 (kg/m2/s)
     real(r8),         intent(out)   :: aq_h2so4_production(:,:)       ! aqueous phase production of H2SO4 (kg/m2/s)
@@ -234,13 +235,13 @@ contains
     real(r8), parameter :: kh3 = 1.e8_r8            ! HO2(a) + o2-    -> h2o2(a) + o2
     real(r8), parameter :: hplus_scaling_factor = 1.e-14_r8 ! [H+] (mol/L) for pH=14
 
-    !
-    real(r8) :: xdelso4hp(ncol,pver)
+    ! Change in aqueous sulfate volume mixing ratio over current time step (mol mol-1)
+    real(r8) :: change_in_aq_so4_mixing_ratio(ncol,pver)
 
     integer  :: k, i, iter, file
     real(r8) :: wrk, delta
     real(r8) :: xph0, aden, xk, xe, x2
-    real(r8) :: tz, xl, px, qz, pz, es, qs, patm
+    real(r8) :: xl, px, qz, pz, es, qs, patm
     real(r8) :: Eso2, Eso4, Ehno3, Eco2, Eh2o, Enh3
     real(r8) :: so2g, h2o2g, co2g, o3g
     real(r8) :: hno3a, nh3a, so2a, h2o2a, co2a, o3a
@@ -254,7 +255,6 @@ contains
     !            schwartz JGR, 1984, 11589
     !-----------------------------------------------------------------------
     real(r8) :: kh4    ! kh2+kh3
-    real(r8) :: xam    ! air density /cm3
     real(r8) :: ho2s   ! ho2s = ho2(a)+o2-
     real(r8) :: r1h2o2 ! prod(h2o2) by ho2 in mole/L(w)/s
     real(r8) :: r2h2o2 ! prod(h2o2) by ho2 in mix/s
@@ -357,9 +357,8 @@ contains
 
              !-----------------------------------------------------------------
              pz = .01_r8*midpoint_pressure(i,k)       !! pressure in mb
-             tz = temperature(i,k)
-             patm = pz/1013._r8
-             xam  = midpoint_pressure(i,k)/(1.38e-23_r8*tz)  !air density /M3
+             ! This should be divided by 101325, not 101300, but fixing this breaks the tests
+             patm = midpoint_pressure(i,k)/101300._r8
 
              !-----------------------------------------------------------------
              !        ... hno3
@@ -381,7 +380,7 @@ contains
              xk = 2.1e5_r8 *EXP( 8700._r8*work1(i) )
              xe = 15.4_r8
              fact1_hno3 = xk*xe*patm*xhno3(i,k)
-             fact2_hno3 = xk*GAS_CONSTANT_L_ATM_MOL_K*tz*xl
+             fact2_hno3 = xk*GAS_CONSTANT_L_ATM_MOL_K*temperature(i,k)*xl
              fact3_hno3 = xe
 
              !-----------------------------------------------------------------
@@ -405,7 +404,7 @@ contains
              xe = 1.7e-2_r8*EXP( 2090._r8*work1(i) )
              x2 = 6.0e-8_r8*EXP( 1120._r8*work1(i) )
              fact1_so2 = xk*xe*patm*xso2(i,k)
-             fact2_so2 = xk*GAS_CONSTANT_L_ATM_MOL_K*tz*xl
+             fact2_so2 = xk*GAS_CONSTANT_L_ATM_MOL_K*temperature(i,k)*xl
              fact3_so2 = xe
              fact4_so2 = x2
 
@@ -430,7 +429,7 @@ contains
              xe = 1.7e-5_r8*EXP( -4325._r8*work1(i) )
 
              fact1_nh3 = (xk*xe*patm/hplus_scaling_factor)*(xnh3(i,k)+xnh4(i,k))
-             fact2_nh3 = xk*GAS_CONSTANT_L_ATM_MOL_K*tz*xl
+             fact2_nh3 = xk*GAS_CONSTANT_L_ATM_MOL_K*temperature(i,k)*xl
              fact3_nh3 = xe/hplus_scaling_factor
 
              !-----------------------------------------------------------------
@@ -591,12 +590,10 @@ contains
     ver_loop1: do k = 1,pver
        col_loop1: do i = 1,ncol
           work1(i) = 1._r8 / temperature(i,k) - 1._r8 / 298._r8
-          tz = temperature(i,k)
-
           xl = cldconc%xlwc(i,k)
 
-          patm = midpoint_pressure(i,k)/101300._r8        ! press is in pascal
-          xam  = midpoint_pressure(i,k)/(1.38e-23_r8*tz)  ! air density /M3
+          ! This should be dividing by 101325, not 101300, but changing it breaks the tests
+          patm = midpoint_pressure(i,k) / 101300._r8        ! press is in pascal
 
           !-----------------------------------------------------------------------
           !        ... hno3
@@ -646,11 +643,11 @@ contains
           if ( cloud_borne ) then
              r2h2o2 = r1h2o2*xl        &    ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
                   / const0*1.e+6_r8  &    ! correct a bug here ????
-                  / xam
+                  / (midpoint_pressure(i,k)/(BOLTZMANN*temperature(i,k)))
           else
              r2h2o2 = r1h2o2*xl  &          ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
                   * const0     &          ! mole/fm3(a)/s * 1.e-3       = mole/cm3(a)/s
-                  / xam                   ! /cm3(a)/s    / air-den     = mix-ratio/s
+                  / (midpoint_pressure(i,k)/(BOLTZMANN*temperature(i,k))) ! /cm3(a)/s    / air-den     = mix-ratio/s
           endif
 
           if ( .not. cloud_borne) then    ! this seems to be specific to aerosols that are not cloud borne
@@ -664,31 +661,31 @@ contains
           !-----------------------------------------------------------------
           !        ... hno3
           !-----------------------------------------------------------------
-          px = hehno3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
+          px = hehno3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * temperature(i,k) * xl
           hno3g(i,k) = (xhno3(i,k)+xno3(i,k))/(1._r8 + px)
 
           !------------------------------------------------------------------------
           !        ... h2o2
           !------------------------------------------------------------------------
-          px = heh2o2(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
+          px = heh2o2(i,k) * GAS_CONSTANT_L_ATM_MOL_K * temperature(i,k) * xl
           h2o2g =  xh2o2(i,k)/(1._r8+ px)
 
           !------------------------------------------------------------------------
           !         ... so2
           !------------------------------------------------------------------------
-          px = heso2(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
+          px = heso2(i,k) * GAS_CONSTANT_L_ATM_MOL_K * temperature(i,k) * xl
           so2g =  xso2(i,k)/(1._r8+ px)
 
           !------------------------------------------------------------------------
           !         ... o3
           !------------------------------------------------------------------------
-          px = heo3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
+          px = heo3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * temperature(i,k) * xl
           o3g =  xo3(i,k)/(1._r8+ px)
 
           !------------------------------------------------------------------------
           !         ... nh3
           !------------------------------------------------------------------------
-          px = henh3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
+          px = henh3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * temperature(i,k) * xl
           if (nh3%exists()) then
              nh3g(i,k) = (xnh3(i,k)+xnh4(i,k))/(1._r8+ px)
           else
@@ -710,8 +707,8 @@ contains
           !------------------------------------------------------------------------
           !        ... S(IV)+ O3
           !------------------------------------------------------------------------
-          rao3   = 4.39e11_r8 * EXP(-4131._r8/tz)  &
-               + 2.56e3_r8  * EXP(-996._r8 /tz) /xph(i,k)
+          rao3   = 4.39e11_r8 * EXP(-4131._r8/temperature(i,k))  &
+               + 2.56e3_r8  * EXP(-996._r8 /temperature(i,k)) /xph(i,k)
 
           !-----------------------------------------------------------------
           !       ... Prediction after aqueous phase
@@ -788,7 +785,7 @@ contains
              END IF
 
              if (cloud_borne) then
-                xdelso4hp(i,k)  =  xso4(i,k) - xso4_init(i,k)
+                change_in_aq_so4_mixing_ratio(i,k)  =  xso4(i,k) - xso4_init(i,k)
              endif
              !...........................
              !       S(IV) + O3 = S(VI)
@@ -821,7 +818,7 @@ contains
 
     call sox_cldaero_update( state, &
           pbuf, ncol, lchnk, loffset, time_step, mean_mass, pressure_thickness, midpoint_pressure, temperature, cloud_droplet_number, cloud_fraction, cfact, cldconc%xlwc, &
-          xdelso4hp, xh2so4, xso4, xso4_init, nh3g, hno3g, xnh3, xhno3, xnh4c,  xno3c, xmsa, xso2, xh2o2, cloud_borne_aerosol_vmr, species_vmr, &
+          change_in_aq_so4_mixing_ratio, xh2so4, xso4, xso4_init, nh3g, hno3g, xnh3, xhno3, xnh4c,  xno3c, xmsa, xso2, xh2o2, cloud_borne_aerosol_vmr, species_vmr, &
           aq_so4_production, aq_h2so4_production, aq_so4_production_from_h2o2, aq_so4_production_from_o3, aqso4_h2o2_3d=aq_so4_production_from_h2o2_3d, aqso4_o3_3d=aq_so4_production_from_o3_3d )
 
     ph_times_cloud_water(:,:) = 0._r8
