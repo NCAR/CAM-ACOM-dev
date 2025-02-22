@@ -53,6 +53,7 @@ module cloud_aqueous_chemistry
   real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8
   real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314.46261815324_r8*PASCAL_TO_ATM
   real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8 ! J K-1
+  real(r8), parameter :: GAS_CONSTANT_DRY_AIR_J_KG_K = 287.0_r8 ! J kg-1 K-1
 
 contains
 
@@ -143,7 +144,7 @@ contains
        cloud_water,                    &
        cloud_fraction,                 &
        cloud_droplet_number,           &
-       atmospheric_number_density,     &
+       air_number_density,     &
        fixed_concentrations,           &
        cloud_borne_aerosol_vmr,        &
        species_vmr,                    &
@@ -202,7 +203,7 @@ contains
     real(r8), target, intent(in)    :: cloud_water(:,:)                ! cloud liquid water content (kg/kg)
     real(r8), target, intent(in)    :: cloud_fraction(:,:)             ! cloud fraction (unitless)
     real(r8),         intent(in)    :: cloud_droplet_number(:,:)       ! droplet number concentration (#/kg)
-    real(r8),         intent(in)    :: atmospheric_number_density(:,:) ! total atmospheric number density (/cm**3)
+    real(r8),         intent(in)    :: air_number_density(:,:)         ! total atmospheric number density (/cm**3)
     real(r8),         intent(in)    :: fixed_concentrations(:,:,:)     ! fixed concentrations (/cm**3) [invariants elsewhere in CAM]
     real(r8), target, intent(inout) :: cloud_borne_aerosol_vmr(:,:,:)  ! cloud-borne aerosol (vmr) mol/mol = m3/m3 [qcw elsewhere in CAM]
     real(r8),         intent(inout) :: species_vmr(:,:,:)              ! transported species (vmr) mol/mol = m3/m3 [qin elsewhere in CAM]
@@ -227,7 +228,6 @@ contains
     !-----------------------------------------------------------------------
     integer,  parameter :: max_iterations = 20
     real(r8), parameter :: ph0 = 5.0_r8  ! INITIAL PH VALUES
-    real(r8), parameter :: const0 = 1.e3_r8/AVOGADRO
 
     real(r8), parameter :: kh0 = 9.e3_r8            ! HO2(g)          -> Ho2(a)
     real(r8), parameter :: kh1 = 2.05e-5_r8         ! HO2(a)          -> H+ + O2-
@@ -238,15 +238,12 @@ contains
     ! Change in aqueous sulfate volume mixing ratio over current time step (mol mol-1)
     real(r8) :: change_in_aq_so4_mixing_ratio(ncol,pver)
 
-    integer  :: k, i, iter, file
-    real(r8) :: wrk, delta
-    real(r8) :: xph0, aden, xk, xe, x2
-    real(r8) :: xl, px, qz, pz, es, qs, patm
+    integer  :: k, i, iter
+    real(r8) :: xk, xe, x2
+    real(r8) :: xl, px, patm
     real(r8) :: Eso2, Eso4, Ehno3, Eco2, Eh2o, Enh3
     real(r8) :: so2g, h2o2g, co2g, o3g
-    real(r8) :: hno3a, nh3a, so2a, h2o2a, co2a, o3a
     real(r8) :: rah2o2, rao3, pso4, ccc
-    real(r8) :: cnh3, chno3, com, com1, com2, xra
 
     real(r8) :: hno3g(ncol,pver), nh3g(ncol,pver)
     !
@@ -263,7 +260,7 @@ contains
     real(r8), dimension(ncol,pver) ::  xhno3, xh2o2, xso2, xso4, xno3, &
          xnh3, xnh4, xo3, xph, xho2, xh2so4, xmsa, xso4_init
 
-    real(r8), dimension(ncol,pver) :: cfact ! TODO: what is this?
+    real(r8), dimension(ncol,pver) :: air_mass_density_kg_l ! kg L-1
     
     ! Effective Henry's Law constants
     real(r8), dimension(ncol,pver) :: hehno3, heh2o2, heso2, henh3, heo3
@@ -297,34 +294,32 @@ contains
     !      ... Initial values
     !           The values of so2, so4 are after (1) SLT, and CHEM
     !-----------------------------------------------------------------
-    xph0 = 10._r8**(-ph0)                      ! initial PH value
-
     do k = 1,pver
-       cfact(:,k) = atmospheric_number_density(:,k)     &          ! /cm3(a)
-            * 1.e6_r8             &          ! /m3(a)
-            * 1.38e-23_r8/287._r8 &          ! Kg(a)/m3(a)
-            * 1.e-3_r8                       ! Kg(a)/L(a)
+       air_mass_density_kg_l(:,k) = &
+              air_number_density(:,k)               & ! /cm3(a)
+            * 1.e3_r8                               & ! /L(a)
+            * BOLTZMANN/GAS_CONSTANT_DRY_AIR_J_KG_K   ! Kg(a)/L(a)
     end do
 
     cldconc => sox_cldaero_create_obj( cloud_fraction, cloud_borne_aerosol_vmr, &
-                                       cloud_water, cfact, ncol, loffset )
+                                       cloud_water, air_mass_density_kg_l, ncol, loffset )
     xso4c => cldconc%so4c
     xnh4c => cldconc%nh4c
     xno3c => cldconc%no3c
     xso4(:,:) = 0._r8
     xno3(:,:) = 0._r8
     xnh4(:,:) = 0._r8
-    call so2%mixing_ratio(   species_vmr, fixed_concentrations, atmospheric_number_density, xso2   )
-    call nh3%mixing_ratio(   species_vmr, fixed_concentrations, atmospheric_number_density, xnh3   )
-    call hno3%mixing_ratio(  species_vmr, fixed_concentrations, atmospheric_number_density, xhno3  )
-    call h2o2%mixing_ratio(  species_vmr, fixed_concentrations, atmospheric_number_density, xh2o2  )
-    call o3%mixing_ratio(    species_vmr, fixed_concentrations, atmospheric_number_density, xo3    )
-    call ho2%mixing_ratio(   species_vmr, fixed_concentrations, atmospheric_number_density, xho2   )
-    call msa%mixing_ratio(   species_vmr, fixed_concentrations, atmospheric_number_density, xmsa   )
-    call so4%mixing_ratio(   species_vmr, fixed_concentrations, atmospheric_number_density, xso4   )
-    call h2so4%mixing_ratio( species_vmr, fixed_concentrations, atmospheric_number_density, xh2so4 )
+    call so2%mixing_ratio(   species_vmr, fixed_concentrations, air_number_density, xso2   )
+    call nh3%mixing_ratio(   species_vmr, fixed_concentrations, air_number_density, xnh3   )
+    call hno3%mixing_ratio(  species_vmr, fixed_concentrations, air_number_density, xhno3  )
+    call h2o2%mixing_ratio(  species_vmr, fixed_concentrations, air_number_density, xh2o2  )
+    call o3%mixing_ratio(    species_vmr, fixed_concentrations, air_number_density, xo3    )
+    call ho2%mixing_ratio(   species_vmr, fixed_concentrations, air_number_density, xho2   )
+    call msa%mixing_ratio(   species_vmr, fixed_concentrations, air_number_density, xmsa   )
+    call so4%mixing_ratio(   species_vmr, fixed_concentrations, air_number_density, xso4   )
+    call h2so4%mixing_ratio( species_vmr, fixed_concentrations, air_number_density, xh2so4 )
 
-    xph(:,:) = xph0                                ! initial PH value
+    xph(:,:) = 10._r8**(-ph0)                                ! initial PH value
 
     !-----------------------------------------------------------------
     !       ... Temperature dependent Henry constants
@@ -356,7 +351,6 @@ contains
              !-----------------------------------------------------------------
 
              !-----------------------------------------------------------------
-             pz = .01_r8*midpoint_pressure(i,k)       !! pressure in mb
              ! This should be divided by 101325, not 101300, but fixing this breaks the tests
              patm = midpoint_pressure(i,k)/101300._r8
 
@@ -448,8 +442,8 @@ contains
              !-----------------------------------------------------------------
              !         ... so4 effect
              !-----------------------------------------------------------------
-             Eso4 = xso4(i,k)*atmospheric_number_density(i,k)   &         ! /cm3(a)
-                  *const0/xl
+             Eso4 = xso4(i,k)*air_number_density(i,k)   &         ! /cm3(a)
+                  * (1.e3_r8/AVOGADRO) / xl
 
 
              !-----------------------------------------------------------------
@@ -575,8 +569,7 @@ contains
              end do ! iter
 
              if( .not. converged ) then
-                write(iulog,*) 'setsox: pH failed to converge @ (',i,',',k,'), % change=', &
-                     100._r8*delta
+                write(iulog,*) 'setsox: pH failed to converge @ (',i,',',k,')'
              end if
           else
              xph(i,k) =  1.e-7_r8
@@ -616,8 +609,7 @@ contains
           xe = 1.7e-2_r8*EXP( 2090._r8*work1(i) )
           x2 = 6.0e-8_r8*EXP( 1120._r8*work1(i) )
 
-          wrk = xe/xph(i,k)
-          heso2(i,k)  = xk*(1._r8 + wrk*(1._r8 + x2/xph(i,k)))
+          heso2(i,k)  = xk*(1._r8 + xe/xph(i,k)*(1._r8 + x2/xph(i,k)))
 
           !-----------------------------------------------------------------
           !          ... nh3
@@ -641,12 +633,12 @@ contains
           r1h2o2 = kh4*ho2s*ho2s                         ! prod(h2o2) in mole/L(w)/s
 
           if ( cloud_borne ) then
-             r2h2o2 = r1h2o2*xl        &    ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
-                  / const0*1.e+6_r8  &    ! correct a bug here ????
+             r2h2o2 = r1h2o2*xl                  & ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
+                  / (1.e3_r8/AVOGADRO)*1.e+6_r8  & ! correct a bug here ????
                   / (midpoint_pressure(i,k)/(BOLTZMANN*temperature(i,k)))
           else
-             r2h2o2 = r1h2o2*xl  &          ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
-                  * const0     &          ! mole/fm3(a)/s * 1.e-3       = mole/cm3(a)/s
+             r2h2o2 = r1h2o2*xl         & ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
+                  * (1.e3_r8/AVOGADRO)  & ! mole/fm3(a)/s * 1.e-3       = mole/cm3(a)/s
                   / (midpoint_pressure(i,k)/(BOLTZMANN*temperature(i,k))) ! /cm3(a)/s    / air-den     = mix-ratio/s
           endif
 
@@ -747,8 +739,8 @@ contains
 
              pso4 = pso4 & ! [M/s] = [mole/L(w)/s]
                   * xl & ! [mole/L(a)/s]
-                  / const0 & ! [/L(a)/s]
-                  / atmospheric_number_density(i,k)
+                  / (1.e3_r8/AVOGADRO) & ! [/L(a)/s]
+                  / air_number_density(i,k)
 
 
              ccc = pso4*time_step
@@ -793,10 +785,10 @@ contains
 
              pso4 = rao3 * heo3(i,k)*o3g*patm_x * heso2(i,k)*so2g*patm_x  ! [M/s]
 
-             pso4 = pso4        &                                ! [M/s] =  [mole/L(w)/s]
-                  * xl          &                                ! [mole/L(a)/s]
-                  / const0      &                                ! [/L(a)/s]
-                  / atmospheric_number_density(i,k)                                    ! [mixing ratio/s]
+             pso4 = pso4               &    ! [M/s] =  [mole/L(w)/s]
+                  * xl                 &    ! [mole/L(a)/s]
+                  / (1.e3_r8/AVOGADRO) &    ! [/L(a)/s]
+                  / air_number_density(i,k) ! [mixing ratio/s]
 
              ccc = pso4*time_step
              ccc = max(ccc, 1.e-30_r8)
@@ -817,7 +809,7 @@ contains
     end do ver_loop1
 
     call sox_cldaero_update( state, &
-          pbuf, ncol, lchnk, loffset, time_step, mean_mass, pressure_thickness, midpoint_pressure, temperature, cloud_droplet_number, cloud_fraction, cfact, cldconc%xlwc, &
+          pbuf, ncol, lchnk, loffset, time_step, mean_mass, pressure_thickness, midpoint_pressure, temperature, cloud_droplet_number, cloud_fraction, air_mass_density_kg_l, cldconc%xlwc, &
           change_in_aq_so4_mixing_ratio, xh2so4, xso4, xso4_init, nh3g, hno3g, xnh3, xhno3, xnh4c,  xno3c, xmsa, xso2, xh2o2, cloud_borne_aerosol_vmr, species_vmr, &
           aq_so4_production, aq_h2so4_production, aq_so4_production_from_h2o2, aq_so4_production_from_o3, aqso4_h2o2_3d=aq_so4_production_from_h2o2_3d, aqso4_o3_3d=aq_so4_production_from_o3_3d )
 
@@ -877,12 +869,12 @@ contains
    !
    ! For species that are not defined, the mixing ratio is set to zero.
    subroutine cloud_species_get_mixing_ratio( this, mixing_ratios, &
-       fixed_concentrations, air_density, mixing_ratio )
+       fixed_concentrations, air_number_density, mixing_ratio )
 
       class(cloud_species_t), intent(in) :: this
       real(r8), intent(in)  :: mixing_ratios(:,:,:)        ! all mixing ratios (mol mol-1) [column, layer, species]
       real(r8), intent(in)  :: fixed_concentrations(:,:,:) ! all fixed concentrations (# cm-3) [column, layer, species]
-      real(r8), intent(in)  :: air_density(:,:)            ! air density (# cm-3) [column, layer]
+      real(r8), intent(in)  :: air_number_density(:,:)     ! air density (# cm-3) [column, layer]
       real(r8), intent(out) :: mixing_ratio(:,:)           ! species mixing ratio (mol mol-1) [column, layer]
       
       if ( this%state_index_ == CLOUD_INDEX_UNDEFINED ) then
@@ -891,7 +883,7 @@ contains
       end if
       if ( this%is_constant_ ) then
          mixing_ratio(:,:) = fixed_concentrations(:,:,this%state_index_) &
-                             / air_density(:,:)
+                             / air_number_density(:,:)
       else
          mixing_ratio(:,:) = mixing_ratios(:,:,this%state_index_)
       end if
