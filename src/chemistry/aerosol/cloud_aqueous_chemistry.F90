@@ -238,7 +238,10 @@ contains
     real(r8) :: xl, px, patm
     real(r8) :: Eso2, Eso4, Ehno3, Eco2, Eh2o, Enh3
     real(r8) :: so2g, h2o2g, co2g, o3g
-    real(r8) :: rah2o2, rao3, pso4, ccc
+    real(r8) :: k_siv_h2o2  ! rate constant for reaction of S(IV) with H2O2
+    real(r8) :: k_siv_o3    ! rate constant for reaction of S(IV) with O3
+    real(r8) :: dso4_dt     ! rate of change of SO4
+    real(r8) :: delta_concentration
 
     real(r8) :: hno3g(ncol,pver), nh3g(ncol,pver)
     !
@@ -688,13 +691,13 @@ contains
           !------------------------------------------------------------------------
           !       ... S(IV) (HSO3) + H2O2
           !------------------------------------------------------------------------
-          rah2o2 = 8.e4_r8 * EXP( -3650._r8*work1(i) )  &
+          k_siv_h2o2 = 8.e4_r8 * EXP( -3650._r8*work1(i) )  &
                / (.1_r8 + xph(i,k))
 
           !------------------------------------------------------------------------
           !        ... S(IV)+ O3
           !------------------------------------------------------------------------
-          rao3   = 4.39e11_r8 * EXP(-4131._r8/temperature(i,k))  &
+          k_siv_o3   = 4.39e11_r8 * EXP(-4131._r8/temperature(i,k))  &
                + 2.56e3_r8  * EXP(-996._r8 /temperature(i,k)) /xph(i,k)
 
           !-----------------------------------------------------------------
@@ -723,28 +726,26 @@ contains
              endif
 
              if (cloud_borne) then
-
-                pso4 = rah2o2 * 7.4e4_r8*EXP(6621._r8*work1(i)) * h2o2g * patm_x &
+                dso4_dt = k_siv_h2o2 * 7.4e4_r8*EXP(6621._r8*work1(i)) * h2o2g * patm_x &
                      * 1.23_r8 *EXP(3120._r8*work1(i)) * so2g * patm_x
              else
-                pso4 = rah2o2 * heh2o2(i,k) * h2o2g * patm_x  &
+                dso4_dt = k_siv_h2o2 * heh2o2(i,k) * h2o2g * patm_x  &
                      * heso2(i,k)  * so2g  * patm_x    ! [M/s]
-
              endif
 
-             pso4 = pso4 & ! [M/s] = [mole/L(w)/s]
+             dso4_dt = dso4_dt & ! [M/s] = [mole/L(w)/s]
                   * xl & ! [mole/L(a)/s]
                   / (1.e3_r8/AVOGADRO) & ! [/L(a)/s]
                   / air_number_density(i,k)
 
 
-             ccc = pso4*time_step
-             ccc = max(ccc, 1.e-30_r8)
+             delta_concentration = dso4_dt*time_step
+             delta_concentration = max(delta_concentration, 1.e-30_r8)
 
              xso4_init(i,k)=xso4(i,k)
 
              IF (xh2o2(i,k) .gt. xso2(i,k)) THEN
-                if (ccc .gt. xso2(i,k)) then
+                if (delta_concentration .gt. xso2(i,k)) then
                    xso4(i,k)=xso4(i,k)+xso2(i,k)
                    if (cloud_borne) then
                       xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
@@ -754,20 +755,20 @@ contains
                       xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
                    endif
                 else
-                   xso4(i,k)  = xso4(i,k)  + ccc
-                   xh2o2(i,k) = xh2o2(i,k) - ccc
-                   xso2(i,k)  = xso2(i,k)  - ccc
+                   xso4(i,k)  = xso4(i,k)  + delta_concentration
+                   xh2o2(i,k) = xh2o2(i,k) - delta_concentration
+                   xso2(i,k)  = xso2(i,k)  - delta_concentration
                 end if
 
              ELSE
-                if (ccc  .gt. xh2o2(i,k)) then
+                if (delta_concentration  .gt. xh2o2(i,k)) then
                    xso4(i,k)=xso4(i,k)+xh2o2(i,k)
                    xso2(i,k)=xso2(i,k)-xh2o2(i,k)
                    xh2o2(i,k)=1.e-20_r8
                 else
-                   xso4(i,k)  = xso4(i,k)  + ccc
-                   xh2o2(i,k) = xh2o2(i,k) - ccc
-                   xso2(i,k)  = xso2(i,k)  - ccc
+                   xso4(i,k)  = xso4(i,k)  + delta_concentration
+                   xh2o2(i,k) = xh2o2(i,k) - delta_concentration
+                   xso2(i,k)  = xso2(i,k)  - delta_concentration
                 end if
              END IF
 
@@ -778,24 +779,24 @@ contains
              !       S(IV) + O3 = S(VI)
              !...........................
 
-             pso4 = rao3 * heo3(i,k)*o3g*patm_x * heso2(i,k)*so2g*patm_x  ! [M/s]
+             dso4_dt = k_siv_o3 * heo3(i,k)*o3g*patm_x * heso2(i,k)*so2g*patm_x  ! [M/s]
 
-             pso4 = pso4               &    ! [M/s] =  [mole/L(w)/s]
+             dso4_dt = dso4_dt               &    ! [M/s] =  [mole/L(w)/s]
                   * xl                 &    ! [mole/L(a)/s]
                   / (1.e3_r8/AVOGADRO) &    ! [/L(a)/s]
                   / air_number_density(i,k) ! [mixing ratio/s]
 
-             ccc = pso4*time_step
-             ccc = max(ccc, 1.e-30_r8)
+             delta_concentration = dso4_dt*time_step
+             delta_concentration = max(delta_concentration, 1.e-30_r8)
 
              xso4_init(i,k)=xso4(i,k)
 
-             if (ccc .gt. xso2(i,k)) then
+             if (delta_concentration .gt. xso2(i,k)) then
                 xso4(i,k) = xso4(i,k) + xso2(i,k)
                 xso2(i,k) = 1.e-20_r8
              else
-                xso4(i,k) = xso4(i,k) + ccc
-                xso2(i,k) = xso2(i,k) - ccc
+                xso4(i,k) = xso4(i,k) + delta_concentration
+                xso2(i,k) = xso2(i,k) - delta_concentration
              end if
 
           END IF !! WHEN CLOUD IS PRESENTED
