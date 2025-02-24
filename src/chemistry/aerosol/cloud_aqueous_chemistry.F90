@@ -32,7 +32,7 @@ module cloud_aqueous_chemistry
   ! Cloud chemistry species information
   type :: cloud_species_t
     logical :: is_constant_ = .false.
-    integer :: state_index_ = CLOUD_INDEX_UNDEFINED
+    integer :: state_index_ = CLOUD_INDEX_UNDEFINED ! index in the state vector or the fixed concentrations array
     character(len=:), allocatable :: name_
   contains
      procedure :: exists => cloud_species_exists
@@ -61,7 +61,9 @@ contains
 !-----------------------------------------------------------------------
   subroutine initialize()
     !-----------------------------------------------------------------------
-    !	... initialize the hetero sox routine
+    !	... prepare for cloud aqueous chemistry
+    ! - Look up cloud chemistry species
+    ! - Determine if enough species are present to perform cloud chemistry
     !-----------------------------------------------------------------------
 
     use spmd_utils,      only : masterproc
@@ -129,6 +131,10 @@ contains
   end subroutine initialize
 
 !-----------------------------------------------------------------------
+! Calculates the formation of sulfate and updates sulfate concentrations
+! due to cloud aqueous chemistry. Also outputs the production rates
+! (kg m-2 s-1) of various reactions of sulfur species with various
+! oxidants (e.g., H2O2(aq), H2SO4(aq)). 
 !-----------------------------------------------------------------------
   subroutine calculate( state,         &
        pbuf,                           &
@@ -191,10 +197,10 @@ contains
     integer,          intent(in)    :: lchnk                           ! chunk id
     integer,          intent(in)    :: loffset                         ! offset of chem tracers in the advected tracers array
     real(r8),         intent(in)    :: time_step                       ! time step (sec)
-    real(r8),         intent(in)    :: midpoint_pressure(:,:)          ! midpoint pressure ( Pa )
-    real(r8),         intent(in)    :: pressure_thickness(:,:)         ! pressure thickness of levels (Pa)
+    real(r8),         intent(in)    :: midpoint_pressure(:,:)          ! midpoint pressure (Pa)
+    real(r8),         intent(in)    :: pressure_thickness(:,:)         ! pressure thickness of levels (Pa) [pdel elsewhere in CAM]
     real(r8),         intent(in)    :: temperature(:,:)                ! temperature (K) [tfld elsewhere in CAM]
-    real(r8),         intent(in)    :: mean_mass(:,:)                  ! mean wet atmospheric mass ( amu )
+    real(r8),         intent(in)    :: mean_mass(:,:)                  ! mean wet atmospheric mass (amu)
     real(r8), target, intent(in)    :: cloud_water(:,:)                ! cloud liquid water content (kg/kg)
     real(r8), target, intent(in)    :: cloud_fraction(:,:)             ! cloud fraction (unitless)
     real(r8),         intent(in)    :: cloud_droplet_number(:,:)       ! droplet number concentration (#/kg)
@@ -218,21 +224,25 @@ contains
 
     !-----------------------------------------------------------------------
     !      ... Local variables
-    !
-    !           xhno3 ... in mixing ratio
     !-----------------------------------------------------------------------
-    integer,  parameter :: max_iterations = 20
-    real(r8), parameter :: ph0 = 5.0_r8  ! INITIAL PH VALUES
+    integer,  parameter :: MAX_ITERATIONS = 20
+    real(r8), parameter :: INITIAL_PH = 5.0_r8  ! Initial pH value
+    real(r8), parameter :: MINIMUM_CLOUD_LIQUID_WATER = 1.e-8_r8 ! Minimum cloud liquid water content (kg/kg)
 
+    ! Effective Henry's Law constants for HO2 partitioning
+    ! TODO: skipping remnaming of these in anticipation of a partitioning struct
     real(r8), parameter :: kh0 = 9.e3_r8            ! HO2(g)          -> Ho2(a)
     real(r8), parameter :: kh1 = 2.05e-5_r8         ! HO2(a)          -> H+ + O2-
     real(r8), parameter :: kh2 = 8.6e5_r8           ! HO2(a) + ho2(a) -> h2o2(a) + o2
     real(r8), parameter :: kh3 = 1.e8_r8            ! HO2(a) + o2-    -> h2o2(a) + o2
-    real(r8), parameter :: hplus_scaling_factor = 1.e-14_r8 ! [H+] (mol/L) for pH=14
+
+    ! Water dissociation constant (mol2/L2) [H+][OH-]
+    real(r8), parameter :: water_dissociation_constant = 1.e-14_r8
 
     ! Change in aqueous sulfate volume mixing ratio over current time step (mol mol-1)
     real(r8) :: change_in_aq_so4_mixing_ratio(ncol,pver)
 
+    ! TODO: Skipping renaming of these in anticipation of partitioning/pH estimation structs
     integer  :: k, i, iter
     real(r8) :: xk, xe, x2
     real(r8) :: xl, px, patm
@@ -249,7 +259,6 @@ contains
     !            for Ho2(g) -> H2o2(a) formation
     !            schwartz JGR, 1984, 11589
     !-----------------------------------------------------------------------
-    real(r8) :: kh4    ! kh2+kh3
     real(r8) :: ho2s   ! ho2s = ho2(a)+o2-
     real(r8) :: r1h2o2 ! prod(h2o2) by ho2 in mole/L(w)/s
     real(r8) :: r2h2o2 ! prod(h2o2) by ho2 in mix/s
@@ -263,16 +272,19 @@ contains
     ! Effective Henry's Law constants
     real(r8), dimension(ncol,pver) :: hehno3, heh2o2, heso2, henh3, heo3
 
+    ! TODO: Figure out what this actually represents (it differs based on the value of cloud_borne)
     real(r8) :: patm_x
 
     real(r8), dimension(ncol)  :: work1
     logical :: converged
 
+    ! Cloud-borne species volume mixing ratios
     real(r8), pointer :: xso4c(:,:)
     real(r8), pointer :: xnh4c(:,:)
     real(r8), pointer :: xno3c(:,:)
     type(cldaero_conc_t), pointer :: cldconc
 
+    ! TODO: Skipping renaming of these in anticipation of partitioning/pH estimation structs
     real(r8) :: fact1_hno3, fact2_hno3, fact3_hno3
     real(r8) :: fact1_so2, fact2_so2, fact3_so2, fact4_so2
     real(r8) :: fact1_nh3, fact2_nh3, fact3_nh3
@@ -282,10 +294,6 @@ contains
     real(r8) :: yph, yph_lo, yph_hi
     real(r8) :: ynetpos, ynetpos_lo, ynetpos_hi
 
-    !-----------------------------------------------------------------
-    !       ... NOTE: The press array is in pascals and must be
-    !                 mutiplied by 10 to yield dynes/cm**2.
-    !-----------------------------------------------------------------
     !==================================================================
     !       ... First set the PH
     !==================================================================
@@ -317,7 +325,7 @@ contains
     call so4%mixing_ratio(   species_vmr, fixed_concentrations, air_number_density, xso4   )
     call h2so4%mixing_ratio( species_vmr, fixed_concentrations, air_number_density, xh2so4 )
 
-    xph(:,:) = 10._r8**(-ph0)                                ! initial PH value
+    xph(:,:) = 10._r8**(-INITIAL_PH)                                ! initial PH value
 
     !-----------------------------------------------------------------
     !       ... Temperature dependent Henry constants
@@ -332,7 +340,7 @@ contains
           endif
           xl = cldconc%xlwc(i,k)
 
-          if( xl >= 1.e-8_r8 ) then
+          if( xl >= MINIMUM_CLOUD_LIQUID_WATER ) then
              work1(i) = 1._r8 / temperature(i,k) - 1._r8 / 298._r8
 
              !-----------------------------------------------------------------
@@ -404,30 +412,31 @@ contains
              !          ... nh3
              !-----------------------------------------------------------------
              ! previous code
-             !    henh3(i,k)  = xk*(1._r8 + xe*xph(i,k)/hplus_scaling_factor)
+             !    henh3(i,k)  = xk*(1._r8 + xe*xph(i,k)/water_dissociation_constant)
              !    px = henh3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
              !    nh3g = (xnh3(i,k)+xnh4(i,k))/(1._r8+ px)
-             !    Enh3 = xk*xe*nh3g/hplus_scaling_factor *patm
+             !    Enh3 = xk*xe*nh3g/water_dissociation_constant *patm
              ! equivalent new code
-             !    henh3 = xk + xk*xe*hplus/hplus_scaling_factor
+             !    henh3 = xk + xk*xe*hplus/water_dissociation_constant
              !    nh3g = xnh34/(1 + px)
              !         = xnh34/(1 + henh3*ra*tz*xl)
-             !         = xnh34/(1 + xk*ra*tz*xl*(1 + xe*hplus/hplus_scaling_factor)
-             !    enh3 = nh3g*xk*xe*patm/hplus_scaling_factor
-             !          = ((xk*xe*patm/hplus_scaling_factor)*xnh34)/(1 + xk*ra*tz*xl*(1 + xe*hplus/hplus_scaling_factor)
+             !         = xnh34/(1 + xk*ra*tz*xl*(1 + xe*hplus/water_dissociation_constant)
+             !    enh3 = nh3g*xk*xe*patm/water_dissociation_constant
+             !          = ((xk*xe*patm/water_dissociation_constant)*xnh34)/
+             !              (1 + xk*ra*tz*xl*(1 + xe*hplus/water_dissociation_constant)
              !          = ( fact1_nh3            )/(1 + fact2_nh3  *(1 + fact3_nh3*hplus)
              !    [nh4+] = enh3*hplus
              xk = 58._r8   *EXP( 4085._r8*work1(i) )
              xe = 1.7e-5_r8*EXP( -4325._r8*work1(i) )
 
-             fact1_nh3 = (xk*xe*patm/hplus_scaling_factor)*(xnh3(i,k)+xnh4(i,k))
+             fact1_nh3 = (xk*xe*patm/water_dissociation_constant)*(xnh3(i,k)+xnh4(i,k))
              fact2_nh3 = xk*GAS_CONSTANT_L_ATM_MOL_K*temperature(i,k)*xl
-             fact3_nh3 = xe/hplus_scaling_factor
+             fact3_nh3 = xe/water_dissociation_constant
 
              !-----------------------------------------------------------------
              !        ... h2o effects
              !-----------------------------------------------------------------
-             Eh2o = hplus_scaling_factor
+             Eh2o = water_dissociation_constant
 
              !-----------------------------------------------------------------
              !        ... co2 effects
@@ -454,7 +463,7 @@ contains
              !    yposnet_lo and yposnet_hi = net positive ions for
              !       yph_lo and yph_hi
              !-----------------------------------------------------------------
-             do iter = 1, max_iterations
+             do iter = 1, MAX_ITERATIONS
 
                 if (.not. present(specified_ph)) then
                    if (iter == 1) then
@@ -614,7 +623,7 @@ contains
           !-----------------------------------------------------------------
           xk = 58._r8   *EXP( 4085._r8*work1(i) )
           xe = 1.7e-5_r8*EXP(-4325._r8*work1(i) )
-          henh3(i,k)  = xk*(1._r8 + xe*xph(i,k)/hplus_scaling_factor)
+          henh3(i,k)  = xk*(1._r8 + xe*xph(i,k)/water_dissociation_constant)
 
           !-----------------------------------------------------------------
           !        ... o3
@@ -626,9 +635,8 @@ contains
           !       ... for Ho2(g) -> H2o2(a) formation
           !           schwartz JGR, 1984, 11589
           !------------------------------------------------------------------------
-          kh4 = (kh2 + kh3*kh1/xph(i,k)) / ((1._r8 + kh1/xph(i,k))**2)
           ho2s = kh0*xho2(i,k)*patm*(1._r8 + kh1/xph(i,k))  ! ho2s = ho2(a)+o2-
-          r1h2o2 = kh4*ho2s*ho2s                         ! prod(h2o2) in mole/L(w)/s
+          r1h2o2 = (kh2 + kh3*kh1/xph(i,k)) / ((1._r8 + kh1/xph(i,k))**2)*ho2s*ho2s ! prod(h2o2) in mole/L(w)/s
 
           if ( cloud_borne ) then
              r2h2o2 = r1h2o2*xl                  & ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
@@ -717,7 +725,7 @@ contains
           !       S(IV) + H2O2 = S(VI)
           !............................
 
-          IF (XL .ge. 1.e-8_r8) THEN    !! WHEN CLOUD IS PRESENTED
+          IF (XL .ge. MINIMUM_CLOUD_LIQUID_WATER) THEN    !! WHEN CLOUD IS PRESENTED
 
              if (cloud_borne) then
                 patm_x = patm
