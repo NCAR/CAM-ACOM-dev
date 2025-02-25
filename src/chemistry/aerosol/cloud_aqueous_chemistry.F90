@@ -106,12 +106,6 @@ contains
     endif
 
     if (masterproc) then
-       write(iulog,*) 'cloud_aqueous_chemistry_init: '//&
-                      'do_cloud_aqueous_chemistry = ',&
-                      do_cloud_aqueous_chemistry
-    endif
-
-    if (masterproc) then
       if( do_cloud_aqueous_chemistry ) then
          write(iulog,*) '-----------------------------------------'
          write(iulog,*) ' cloud aqueous chemistry is active'
