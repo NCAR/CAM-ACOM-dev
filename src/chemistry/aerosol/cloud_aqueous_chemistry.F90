@@ -31,12 +31,12 @@ module cloud_aqueous_chemistry
 
   ! Cloud chemistry species information
   type :: cloud_species_t
-    logical :: is_constant_ = .false.
-    integer :: state_index_ = CLOUD_INDEX_UNDEFINED ! index in the state vector or the fixed concentrations array
     character(len=:), allocatable :: name_
+    integer :: state_index_ = CLOUD_INDEX_UNDEFINED ! index in the state vector or the fixed concentrations array
+    logical :: is_constant_ = .false.
   contains
-     procedure :: exists => cloud_species_exists
-     procedure :: mixing_ratio => cloud_species_get_mixing_ratio
+    procedure :: exists => cloud_species_exists
+    procedure :: mixing_ratio => cloud_species_get_mixing_ratio
   end type cloud_species_t
 
   interface cloud_species_t
@@ -76,14 +76,10 @@ contains
     use carma_clouds,    only : sox_cldaero_init
 #endif
 
-    logical :: modal_aerosols
+    logical :: is_modal_aerosols
 
-    call phys_getopts( prog_modal_aero_out=modal_aerosols )
-    cloud_borne = modal_aerosols .or. carma_do_cloudborne
-
-    !-----------------------------------------------------------------
-    !       ... get species indicies
-    !-----------------------------------------------------------------
+    call phys_getopts( prog_modal_aero_out=is_modal_aerosols )
+    cloud_borne = is_modal_aerosols .or. carma_do_cloudborne
 
     so2 = cloud_species_t( 'SO2' )
     nh3 = cloud_species_t( 'NH3' )
@@ -97,12 +93,16 @@ contains
 
     do_cloud_aqueous_chemistry = so2%exists() .and. h2o2%exists() .and. &
                                  o3%exists() .and. ho2%exists()
-    if (cloud_borne) then
-       do_cloud_aqueous_chemistry = do_cloud_aqueous_chemistry .and. &
-              h2so4%exists()
-    else
-       do_cloud_aqueous_chemistry = do_cloud_aqueous_chemistry .and. &
-              so4%exists() .and. nh3%exists()
+    if (do_cloud_aqueous_chemistry) then
+      if (cloud_borne) then
+        if (.not. h2so4%exists()) then
+          do_cloud_aqueous_chemistry = .false.
+        endif
+      else
+        if (.not. (so4%exists() .and. nh3%exists())) then
+          do_cloud_aqueous_chemistry = .false.
+        endif
+      endif
     endif
 
     if (masterproc) then
@@ -111,20 +111,18 @@ contains
                       do_cloud_aqueous_chemistry
     endif
 
-    if( do_cloud_aqueous_chemistry ) then
-       if (masterproc) then
-          write(iulog,*) '-----------------------------------------'
-          write(iulog,*) ' cloud aqueous chemistry is active'
-          write(iulog,*) '-----------------------------------------'
-       endif
-    else
-       if (masterproc) then
-          write(iulog,*) '-----------------------------------------'
-          write(iulog,*) ' cloud aqueous chemistry is inactive'
-          write(iulog,*) '-----------------------------------------'
-       endif
-       return
+    if (masterproc) then
+      if( do_cloud_aqueous_chemistry ) then
+         write(iulog,*) '-----------------------------------------'
+         write(iulog,*) ' cloud aqueous chemistry is active'
+         write(iulog,*) '-----------------------------------------'
+      else
+         write(iulog,*) '-----------------------------------------'
+         write(iulog,*) ' cloud aqueous chemistry is inactive'
+         write(iulog,*) '-----------------------------------------'
+      end if
     end if
+    if (.not. do_cloud_aqueous_chemistry) return
     
     call sox_cldaero_init()
 
@@ -149,7 +147,7 @@ contains
        cloud_water,                    &
        cloud_fraction,                 &
        cloud_droplet_number,           &
-       air_number_density,     &
+       air_number_density,             &
        fixed_concentrations,           &
        cloud_borne_aerosol_vmr,        &
        species_vmr,                    &
@@ -193,6 +191,8 @@ contains
     !-----------------------------------------------------------------------
     !      ... Dummy arguments
     !-----------------------------------------------------------------------
+    type(physics_state),                intent(in)    :: state         ! Physics state variables
+    type(physics_buffer_desc), pointer, intent(inout) :: pbuf(:)       ! Physics buffer
     integer,          intent(in)    :: ncol                            ! num of columns in chunk
     integer,          intent(in)    :: lchnk                           ! chunk id
     integer,          intent(in)    :: loffset                         ! offset of chem tracers in the advected tracers array
@@ -218,9 +218,6 @@ contains
     real(r8),         intent(out), optional :: aq_so4_production_from_h2o2_3d(:, :) ! 3D SO4 aqueous phase production due to H2O2 (kg/m2/s)
     real(r8),         intent(out), optional :: aq_so4_production_from_o3_3d(:, :)   ! 3D SO4 aqueous phase production due to O3 (kg/m2/s)
 
-    type(physics_state),    intent(in)    :: state     ! Physics state variables
-
-    type(physics_buffer_desc), pointer :: pbuf(:)
 
     !-----------------------------------------------------------------------
     !      ... Local variables
@@ -302,9 +299,9 @@ contains
     !-----------------------------------------------------------------
     do k = 1,pver
        air_mass_density_kg_l(:,k) = &
-              air_number_density(:,k)               & ! /cm3(a)
-            * 1.e3_r8                               & ! /L(a)
-            * BOLTZMANN/GAS_CONSTANT_DRY_AIR_J_KG_K   ! Kg(a)/L(a)
+              air_number_density(:,k)               & ! molecules(air) cm-3
+            * 1.e3_r8                               & ! L-1
+            * BOLTZMANN/GAS_CONSTANT_DRY_AIR_J_KG_K   ! kg(air) L-1
     end do
 
     cldconc => sox_cldaero_create_obj( cloud_fraction, cloud_borne_aerosol_vmr, &
@@ -837,7 +834,10 @@ contains
 !-------------------------------------------------------------------------------
 
    !-------------------------------------------------------------------------------
-   ! Creates a cloud species object with state indices
+   ! Creates a cloud species object with the given name
+   !
+   ! The name is used to determine the species index in the state arrays.
+   ! If the species is not found, the index is set to CLOUD_INDEX_UNDEFINED.
    function cloud_species_constructor( species_name ) result( this )
    
       use mo_chem_utls, only : get_spc_ndx, get_inv_ndx
