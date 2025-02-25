@@ -294,7 +294,7 @@ contains
     do k = 1,pver
        air_mass_density_kg_l(:,k) = &
               air_number_density(:,k)               & ! molecules(air) cm-3
-            * 1.e3_r8                               & ! L-1
+            * 1.e3_r8                               & ! molecules(air) L-1
             * BOLTZMANN/GAS_CONSTANT_DRY_AIR_J_KG_K   ! kg(air) L-1
     end do
 
