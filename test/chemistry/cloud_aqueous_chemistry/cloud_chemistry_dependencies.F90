@@ -23,14 +23,14 @@ module physics_buffer
   integer, parameter :: dtype_r8 = 1
   integer, parameter :: pbuf_get_index = 1
   integer, parameter :: pbuf_add_field = 1
-  type, public :: physics_buffer_desc
+  type :: physics_buffer_desc
   end type physics_buffer_desc
 end module physics_buffer
 
 module physics_types
   implicit none
   public :: physics_state
-  type, public :: physics_state
+  type :: physics_state
   end type physics_state
 end module physics_types
 

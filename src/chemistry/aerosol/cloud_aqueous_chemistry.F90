@@ -54,6 +54,7 @@ module cloud_aqueous_chemistry
   real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314.46261815324_r8*PASCAL_TO_ATM
   real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8 ! J K-1
   real(r8), parameter :: GAS_CONSTANT_DRY_AIR_J_KG_K = 287.0_r8 ! J kg-1 K-1
+  real(r8), parameter :: SMALL_NUMBER = 1.e-30_r8 ! unitless
 
 contains
 
@@ -251,8 +252,8 @@ contains
     !            schwartz JGR, 1984, 11589
     !-----------------------------------------------------------------------
     real(r8) :: ho2s   ! ho2s = ho2(a)+o2-
-    real(r8) :: r1h2o2 ! prod(h2o2) by ho2 in mole/L(w)/s
-    real(r8) :: r2h2o2 ! prod(h2o2) by ho2 in mix/s
+    real(r8) :: dh2o2_dt_mol_L_s ! prod(h2o2) by ho2 in mole/L(w)/s
+    real(r8) :: dh2o2_dt_vmr_s ! prod(h2o2) by ho2 in mix/s
 
     ! volume mixing ratios for cloud chemistry species
     real(r8), dimension(ncol,pver) ::  xhno3, xh2o2, xso2, xso4, xno3, &
@@ -627,20 +628,20 @@ contains
           !           schwartz JGR, 1984, 11589
           !------------------------------------------------------------------------
           ho2s = kh0*xho2(i,k)*patm*(1._r8 + kh1/xph(i,k))  ! ho2s = ho2(a)+o2-
-          r1h2o2 = (kh2 + kh3*kh1/xph(i,k)) / ((1._r8 + kh1/xph(i,k))**2)*ho2s*ho2s ! prod(h2o2) in mole/L(w)/s
+          dh2o2_dt_mol_L_s = (kh2 + kh3*kh1/xph(i,k)) / ((1._r8 + kh1/xph(i,k))**2)*ho2s*ho2s ! prod(h2o2) in mole/L(w)/s
 
           if ( cloud_borne ) then
-             r2h2o2 = r1h2o2*xl                  & ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
-                  / (1.e3_r8/AVOGADRO)*1.e+6_r8  & ! correct a bug here ????
+             dh2o2_dt_vmr_s = dh2o2_dt_mol_L_s*xl  & ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
+                  / (1.e3_r8/AVOGADRO)*1.e+6_r8    & ! correct a bug here ????
                   / (midpoint_pressure(i,k)/(BOLTZMANN*temperature(i,k)))
           else
-             r2h2o2 = r1h2o2*xl         & ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
-                  * (1.e3_r8/AVOGADRO)  & ! mole/fm3(a)/s * 1.e-3       = mole/cm3(a)/s
+             dh2o2_dt_vmr_s = dh2o2_dt_mol_L_s*xl  & ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
+                  * (1.e3_r8/AVOGADRO)             & ! mole/fm3(a)/s * 1.e-3       = mole/cm3(a)/s
                   / (midpoint_pressure(i,k)/(BOLTZMANN*temperature(i,k))) ! /cm3(a)/s    / air-den     = mix-ratio/s
           endif
 
           if ( .not. cloud_borne) then    ! this seems to be specific to aerosols that are not cloud borne
-             xh2o2(i,k) = xh2o2(i,k) + r2h2o2*time_step         ! updated h2o2 by het production
+             xh2o2(i,k) = xh2o2(i,k) + dh2o2_dt_vmr_s*time_step  ! updated h2o2 based on heterogeneous production
           endif
 
           !-----------------------------------------------
@@ -732,14 +733,14 @@ contains
                      * heso2(i,k)  * so2g  * patm_x    ! [M/s]
              endif
 
-             dso4_dt = dso4_dt & ! [M/s] = [mole/L(w)/s]
-                  * xl & ! [mole/L(a)/s]
+             dso4_dt = dso4_dt         & ! [M/s] = [mole/L(w)/s]
+                  * xl                 & ! [mole/L(a)/s]
                   / (1.e3_r8/AVOGADRO) & ! [/L(a)/s]
                   / air_number_density(i,k)
 
 
              delta_concentration = dso4_dt*time_step
-             delta_concentration = max(delta_concentration, 1.e-30_r8)
+             delta_concentration = max(delta_concentration, SMALL_NUMBER)
 
              xso4_init(i,k)=xso4(i,k)
 
@@ -748,9 +749,9 @@ contains
                    xso4(i,k)=xso4(i,k)+xso2(i,k)
                    if (cloud_borne) then
                       xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
-                      xso2(i,k)=1.e-20_r8
+                      xso2(i,k)=1.e-20_r8 ! TODO: See if SMALL_NUMBER is more appropriate
                    else       ! ???? bug ????
-                      xso2(i,k)=1.e-20_r8
+                      xso2(i,k)=1.e-20_r8 ! TODO: See if SMALL_NUMBER is more appropriate
                       xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
                    endif
                 else
@@ -780,19 +781,19 @@ contains
 
              dso4_dt = k_siv_o3 * heo3(i,k)*o3g*patm_x * heso2(i,k)*so2g*patm_x  ! [M/s]
 
-             dso4_dt = dso4_dt               &    ! [M/s] =  [mole/L(w)/s]
+             dso4_dt = dso4_dt         &    ! [M/s] =  [mole/L(w)/s]
                   * xl                 &    ! [mole/L(a)/s]
                   / (1.e3_r8/AVOGADRO) &    ! [/L(a)/s]
                   / air_number_density(i,k) ! [mixing ratio/s]
 
              delta_concentration = dso4_dt*time_step
-             delta_concentration = max(delta_concentration, 1.e-30_r8)
+             delta_concentration = max(delta_concentration, SMALL_NUMBER)
 
              xso4_init(i,k)=xso4(i,k)
 
              if (delta_concentration .gt. xso2(i,k)) then
                 xso4(i,k) = xso4(i,k) + xso2(i,k)
-                xso2(i,k) = 1.e-20_r8
+                xso2(i,k) = 1.e-20_r8 ! TODO: See if SMALL_NUMBER is more appropriate
              else
                 xso4(i,k) = xso4(i,k) + delta_concentration
                 xso2(i,k) = xso2(i,k) - delta_concentration
