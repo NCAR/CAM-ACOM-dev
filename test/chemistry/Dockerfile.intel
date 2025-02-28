@@ -1,0 +1,56 @@
+# versions and sizes from here: https://hub.docker.com/r/intel/oneapi-hpckit/tags
+FROM intel/oneapi-hpckit:latest
+
+# Based off of this: https://dgpu-docs.intel.com/driver/installation.html#repository-public-key-used-for-package-and-repository-signing
+# however those docs (at the time of this writing are incorrect) and this is the correct url
+# community.intel.com/t5/Intel-oneAPI-Math-Kernel-Library/Cannot-update-any-packages-using-intel-oneapi-hpckit-latest/m-p/1603192#M36169
+RUN wget -qO - https://repositories.intel.com/gpu/intel-graphics.key | \
+  gpg --yes --dearmor --output /usr/share/keyrings/intel-graphics-archive-keyring.gpg
+
+RUN apt update \
+    && apt -y install \
+      build-essential \
+      ca-certificates \
+      cmake \
+      cmake-curses-gui \
+      libcurl4-openssl-dev \
+      libhdf5-dev \
+      liblapack-dev \
+      libnetcdf-dev \
+      python3 \
+      python3-pip \
+      valgrind \
+      m4 \
+      vim \
+      zlib1g-dev \
+    && apt clean 
+
+# set compilers
+ENV CC=icx
+ENV CXX=icpx
+ENV FC=ifx
+
+# build NetCDF with ifx
+RUN cd /tmp \
+    && wget https://github.com/Unidata/netcdf-fortran/archive/refs/tags/v4.5.3.tar.gz \
+    && tar -xzf v4.5.3.tar.gz \
+    && cd netcdf-fortran-4.5.3 \
+    && mkdir build \
+    && cd build \
+    && cmake .. \
+    && make \
+    && make install \
+    && cd /tmp \
+    && rm -rf netcdf-fortran-4.5.3 v4.5.3.tar.gz
+
+COPY . /cam
+
+RUN cd /cam/test/chemistry \
+    && mkdir build \
+    && cd build \
+    && cmake \
+         -D CMAKE_BUILD_TYPE=DEBUG \
+         .. \
+    && make
+
+WORKDIR /cam/test/chemistry/build
