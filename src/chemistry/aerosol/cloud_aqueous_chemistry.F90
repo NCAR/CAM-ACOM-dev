@@ -54,28 +54,31 @@ module cloud_aqueous_chemistry
     real(r8) :: B_ = 0.0_r8
   end type van_t_hoff_t
 
-  !> Monoprotic acid Henry's Law parameters
+  !> Henry's Law parameters for acids
   !!
   !! Calculates an equilibrium concentration of the dissociated acid based on the
   !! pH of the solution. The equilibrium constant is given by:
-  !! K_eq = [H+][A-]
+  !! K_eq = [H+][A-] (mono-protic acid)
+  !! K_eq = [H+]([HA-] + 2[A--]) (di-protic acid)
   !! and has units of mol^2 L^-2.
   !! Also, calculates the gas-phase mixing ratio (mol mol-1) of the acid based
   !! on the Henry's Law constant and the total mixing ratio.
-  type :: henrys_law_monoprotic_acid_t
+  type :: henrys_law_acid_t
     type(van_t_hoff_t) :: partitioning_factor_       ! A = mol L-1 atm-1, B = K
     type(van_t_hoff_t) :: first_dissociation_factor_ ! A = mol L-1, B = K
+    type(van_t_hoff_t) :: second_dissociation_factor_! A = mol L-1, B = K
     real(r8) :: reference_temperature_ = 298.0_r8    ! K
-    real(r8), allocatable :: terms_(:,:,:) ! 1: mol2 L-2, 2: unitless, 3: mol L-1
+    real(r8), allocatable :: terms_(:,:,:) ! 1: mol2 L-2, 2: unitless, 3: mol L-1, 4: mol L-1
   contains
-    procedure :: set_conditions => henrys_law_monoprotic_acid_set_conditions
-    procedure :: equilibrium_constant => henrys_law_monoprotic_acid_equilibrium_constant
-    procedure :: gas_phase_mixing_ratio => henrys_law_monoprotic_acid_gas_phase_mixing_ratio
-  end type henrys_law_monoprotic_acid_t
+    procedure :: set_conditions => henrys_law_acid_set_conditions
+    procedure :: equilibrium_constant => henrys_law_acid_equilibrium_constant
+    procedure :: gas_phase_mixing_ratio => henrys_law_acid_gas_phase_mixing_ratio
+    procedure :: effective_henrys_law_constant => henrys_law_acid_effective_henrys_law_constant
+  end type henrys_law_acid_t
 
-  interface henrys_law_monoprotic_acid_t
-    module procedure :: henrys_law_monoprotic_acid_constructor
-  end interface henrys_law_monoprotic_acid_t
+  interface henrys_law_acid_t
+    module procedure :: henrys_law_acid_constructor
+  end interface henrys_law_acid_t
     
   type(cloud_species_t) :: so2, nh3, hno3, h2o2, o3, ho2, msa, so4, h2so4
 
@@ -267,7 +270,7 @@ contains
     real(r8) :: change_in_aq_so4_mixing_ratio(ncol,pver)
 
     ! Partitioning calculators
-    type(henrys_law_monoprotic_acid_t) :: hl_hno3
+    type(henrys_law_acid_t) :: hl_hno3, hl_so2
 
     ! Equilibrium constants used to determine condensed phase ion concentrations [various units]
     real(r8) :: Eso2, Eso4, Ehno3, Eco2, Eh2o, Enh3
@@ -315,7 +318,6 @@ contains
     type(cldaero_conc_t), pointer :: cldconc
 
     ! TODO: Skipping renaming of these in anticipation of partitioning/pH estimation structs
-    real(r8) :: fact1_so2, fact2_so2, fact3_so2, fact4_so2
     real(r8) :: fact1_nh3, fact2_nh3, fact3_nh3
     real(r8) :: tmp_hp, tmp_hso3, tmp_hco3, tmp_nh4, tmp_no3
     real(r8) :: tmp_oh, tmp_so3, tmp_so4
@@ -334,11 +336,22 @@ contains
     !       FUTURE_ANSWER_CHANGING_MODIFICATION
     ! Sander, R., 2015. Compilation of Henry's law constants (version 4) for water as solvent.
     ! Atmos. Chem. Phys., 15, 4399–4981, 2015. DOI: 10.5194/acp-15-4399-2015
-    hl_hno3 = henrys_law_monoprotic_acid_t( ncol, pver )
+    hl_hno3 = henrys_law_acid_t( ncol, pver )
     hl_hno3%partitioning_factor_%A_ = 2.1e5_r8
     hl_hno3%partitioning_factor_%B_ = 8700._r8
-    hl_hno3%first_dissociation_factor_%A_ = 15.4_r8    ! TODO: Find reference
+    hl_hno3%first_dissociation_factor_%A_ = 15.4_r8    ! TODO: Find reference - could be related to Ka of HNO3
     hl_hno3%first_dissociation_factor_%B_ = 0.0_r8
+
+    ! SO2 partitioning parameters
+    !
+    ! TODO: Find reference for these values
+    hl_so2 = henrys_law_acid_t( ncol, pver )
+    hl_so2%partitioning_factor_%A_ = 1.23e3_r8
+    hl_so2%partitioning_factor_%B_ = 3120._r8
+    hl_so2%first_dissociation_factor_%A_ = 1.7e-2_r8
+    hl_so2%first_dissociation_factor_%B_ = 2090._r8
+    hl_so2%second_dissociation_factor_%A_ = 6.0e-8_r8
+    hl_so2%second_dissociation_factor_%B_ = 1120._r8
 
     !==================================================================
     !       ... First set the PH
@@ -411,31 +424,7 @@ contains
              ! Update Henry's Law calculators with current conditions
              !-----------------------------------------------------------------
              call hl_hno3%set_conditions( i, k, temperature(i,k), patm, xl, xhno3(i,k) )
-
-             !-----------------------------------------------------------------
-             !          ... so2
-             !-----------------------------------------------------------------
-             ! previous code
-             !    heso2(i,k)  = xk*(1._r8 + wrk*(1._r8 + x2/xph(i,k)))
-             !    px = heso2(i,k) * GAS_CONSTANT_L_ATM_MOL_K * tz * xl
-             !    so2g =  xso2(i,k)/(1._r8+ px)
-             !    Eso2 = xk*xe*so2g *patm
-             ! equivalent new code
-             !    heso2 = xk + xk*xe/hplus * xk*xe*x2/hplus**2
-             !    so2g = xso2/(1 + px)
-             !         = xso2/(1 + heso2*ra*tz*xl)
-             !         = xso2/(1 + xk*ra*tz*xl*(1 + (xe/hplus)*(1 + x2/hplus))
-             !    eso2 = so2g*xk*xe*patm
-             !          = xk*xe*patm*xso2/(1 + xk*ra*tz*xl*(1 + (xe/hplus)*(1 + x2/hplus))
-             !          = ( fact1_so2    )/(1 + fact2_so2 *(1 + (fact3_so2/hplus)*(1 + fact4_so2/hplus)
-             !    [hso3-] + 2*[so3--] = (eso2/hplus)*(1 + 2*x2/hplus)
-             xk = 1.23_r8  *EXP( 3120._r8*work1(i) )
-             xe = 1.7e-2_r8*EXP( 2090._r8*work1(i) )
-             x2 = 6.0e-8_r8*EXP( 1120._r8*work1(i) )
-             fact1_so2 = xk*xe*patm*xso2(i,k)
-             fact2_so2 = xk*GAS_CONSTANT_L_ATM_MOL_K*temperature(i,k)*xl
-             fact3_so2 = xe
-             fact4_so2 = x2
+             call hl_so2%set_conditions( i, k, temperature(i,k), patm, xl, xso2(i,k) )
 
              !-----------------------------------------------------------------
              !          ... nh3
@@ -520,13 +509,8 @@ contains
                 !-----------------------------------------------------------------
                 ! Get equilibrium constants for the current pH
                 !-----------------------------------------------------------------
-                call hl_hno3%equilibrium_constant(i, k, xph(i,k), Ehno3)
-
-                !-----------------------------------------------------------------
-                !          ... so2
-                !-----------------------------------------------------------------
-                Eso2 = fact1_so2/(1.0_r8 + fact2_so2*(1.0_r8 + (fact3_so2/xph(i,k)) &
-                     *(1.0_r8 +  fact4_so2/xph(i,k))))
+                call hl_hno3%equilibrium_constant( i, k, xph(i,k), Ehno3 )
+                call hl_so2%equilibrium_constant(  i, k, xph(i,k), Eso2  )
 
                 !-----------------------------------------------------------------
                 !          ... nh3
@@ -535,7 +519,10 @@ contains
 
                 tmp_nh4  = Enh3 * xph(i,k)
                 tmp_hso3 = Eso2 / xph(i,k)
-                tmp_so3  = tmp_hso3 * 2.0_r8*fact4_so2/xph(i,k)
+                ! TODO: From the original notes, it looks like the following line
+                ! should be:
+                ! tmp_so3  = 0.5 * (tmp_hso3 * 2.0_r8*hl_so2%term_(5,i,k)/xph(i,k))
+                tmp_so3  = tmp_hso3 * 2.0_r8*hl_so2%terms_(5,i,k)/xph(i,k)
                 tmp_hco3 = Eco2 / xph(i,k)
                 tmp_oh   = Eh2o / xph(i,k)
                 tmp_no3  = Ehno3 / xph(i,k)
@@ -634,15 +621,6 @@ contains
           heh2o2(i,k)  = xk*(1._r8 + xe/xph(i,k))
 
           !-----------------------------------------------------------------
-          !         ... so2
-          !-----------------------------------------------------------------
-          xk = 1.23_r8  *EXP( 3120._r8*work1(i) )
-          xe = 1.7e-2_r8*EXP( 2090._r8*work1(i) )
-          x2 = 6.0e-8_r8*EXP( 1120._r8*work1(i) )
-
-          heso2(i,k)  = xk*(1._r8 + xe/xph(i,k)*(1._r8 + x2/xph(i,k)))
-
-          !-----------------------------------------------------------------
           !          ... nh3
           !-----------------------------------------------------------------
           xk = 58._r8   *EXP( 4085._r8*work1(i) )
@@ -680,18 +658,13 @@ contains
           !       ... Partioning
           !-----------------------------------------------
           call hl_hno3%gas_phase_mixing_ratio( i, k, xhno3(i,k)+xno3(i,k), xph(i,k), hno3g(i,k) )
+          call hl_so2%gas_phase_mixing_ratio(  i, k, xso2(i,k), xph(i,k), so2g )
 
           !------------------------------------------------------------------------
           !        ... h2o2
           !------------------------------------------------------------------------
           px = heh2o2(i,k) * GAS_CONSTANT_L_ATM_MOL_K * temperature(i,k) * xl
           h2o2g =  xh2o2(i,k)/(1._r8+ px)
-
-          !------------------------------------------------------------------------
-          !         ... so2
-          !------------------------------------------------------------------------
-          px = heso2(i,k) * GAS_CONSTANT_L_ATM_MOL_K * temperature(i,k) * xl
-          so2g =  xso2(i,k)/(1._r8+ px)
 
           !------------------------------------------------------------------------
           !         ... o3
@@ -745,6 +718,8 @@ contains
           !............................
 
           IF (XL .ge. MINIMUM_CLOUD_LIQUID_WATER) THEN    !! WHEN CLOUD IS PRESENTED
+
+             call hl_so2%effective_henrys_law_constant( i, k, xso2(i,k), heso2(i,k) )
 
              if (cloud_borne) then
                 patm_x = patm
@@ -917,18 +892,20 @@ contains
    end subroutine cloud_species_get_mixing_ratio
 
    !-------------------------------------------------------------------------------
-   ! Constructor for the Henry's Law monoprotic acid object
+   ! Constructor for the Henry's Law acid object
    !-------------------------------------------------------------------------------
-   function henrys_law_monoprotic_acid_constructor( number_of_columns, &
-         number_of_layers) result( this )
+   function henrys_law_acid_constructor( number_of_columns, number_of_layers) &
+         result( this )
 
-      type(henrys_law_monoprotic_acid_t) :: this
+      type(henrys_law_acid_t) :: this
       integer, intent(in) :: number_of_columns
       integer, intent(in) :: number_of_layers
 
-      allocate( this%terms_(3,number_of_columns,number_of_layers) )
+      ! TODO: Consider allocating the specific number of terms based on the
+      !       type of partitioning (e.g., monoprotic, diprotic, etc.)
+      allocate( this%terms_(5,number_of_columns,number_of_layers) )
 
-   end function henrys_law_monoprotic_acid_constructor
+   end function henrys_law_acid_constructor
 
    !-------------------------------------------------------------------------------
    ! Updates the partitioning terms for the current conditions
@@ -940,15 +917,18 @@ contains
    ! The partitioning terms are stored in the object for later use for
    ! calculating the gas-phase mixing ratio and the dissociated acid concentration.
    !
+   ! For a monoprotic acid, the partitioning and first dissociation factors should
+   ! be non-zero, and the second dissociation factor should be zero. For a diprotic
+   ! acid, the partitioning, first, and second dissociation factors should be non-zero.
+   !
    ! The terms as used as follows:
-   !    H_eff = vth1 + vth1 * vth2 / [H+]
+   !    H_eff = vth1 * (1 + vth2 / [H+] * (1 + vth3 / [H+]))
    !    X_gas = X_total / (1 + H_eff * R * T * LWC)
-   !          = X_total / (1 + vth1 * R * T * LWC * (1 + vth2 / [H+]))
-   !          = X_total / (1 + ( term2           )* (1 + term3/ [H+]))
    !    K_eq  = X_gas * vth1 * vth2 * P
-   !          = vth1 * vth2 * P * X_total / (1 + vth1 * R * T * LWC * (1 + vth2 / [H+]))
-   !          = ( term1                  )/ (1 + ( term2           )* (1 + term3/ [H+]))
-   !     [A-] = K_eq / [H+]
+   !          = X_total * vth1 * vth2 * P / (1 + H_eff * R * T * LWC)
+   !     [A-] = K_eq / [H+] (mono-protic acid)
+   !    [HA-] = K_eq / [H+] (di-protic acid)
+   !    [A--] = K_eq / [H+] * (1 + 2 * vth3 / [H+]) (di-protic acid)
    !
    ! where:
    !    H_eff is the effective Henry's Law constant (mol L-1 atm-1)
@@ -961,74 +941,105 @@ contains
    !    LWC is the cloud liquid water content (L_water L_air-1)
    !    [H+] is the hydrogen ion concentration (mol L-1)
    !    [A-] is the dissociated acid concentration (mol L-1)
-   pure elemental subroutine henrys_law_monoprotic_acid_set_conditions( this, &
-         i_column, i_layer, temperature, pressure, cloud_water, total_mixing_ratio )
+   !    vth1 is the partitioning van 't Hoff factor
+   !    vth2 is the first dissociation van 't Hoff factor
+   !    vth3 is the second dissociation van 't Hoff factor
+   pure elemental subroutine henrys_law_acid_set_conditions( this, i_column, &
+         i_layer, temperature, pressure, cloud_water, total_mixing_ratio )
 
-      class(henrys_law_monoprotic_acid_t), intent(inout) :: this
-      integer,  intent(in)    :: i_column
-      integer,  intent(in)    :: i_layer
-      real(r8), intent(in)    :: temperature        ! K
-      real(r8), intent(in)    :: pressure           ! atm
-      real(r8), intent(in)    :: cloud_water        ! L_water L_air-1
-      real(r8), intent(in)    :: total_mixing_ratio ! mol mol-1
+      class(henrys_law_acid_t), intent(inout) :: this
+      integer,                  intent(in)    :: i_column
+      integer,                  intent(in)    :: i_layer
+      real(r8),                 intent(in)    :: temperature        ! K
+      real(r8),                 intent(in)    :: pressure           ! atm
+      real(r8),                 intent(in)    :: cloud_water        ! L_water L_air-1
+      real(r8),                 intent(in)    :: total_mixing_ratio ! mol mol-1
 
-      real(r8) :: v1, v2, temp_delta
+      real(r8) :: v1, v2, v3, temp_delta
 
       temp_delta = 1._r8 / temperature - 1._r8 / this%reference_temperature_     ! K-1
+
       v1 = this%partitioning_factor_%A_ &
            * exp( this%partitioning_factor_%B_ * temp_delta )                    ! mol L-1 atm-1
       v2 = this%first_dissociation_factor_%A_ &
            * exp( this%first_dissociation_factor_%B_ * temp_delta )              ! mol L-1
+      v3 = this%second_dissociation_factor_%A_ &
+           * exp( this%second_dissociation_factor_%B_ * temp_delta )             ! mol L-1
       this%terms_(1,i_column,i_layer) = v1 * v2 * pressure * total_mixing_ratio  ! mol^2 L-2
-      this%terms_(2,i_column,i_layer) = v1 * GAS_CONSTANT_L_ATM_MOL_K &
-                                        * temperature * cloud_water              ! unitless
-      this%terms_(3,i_column,i_layer) = v2                                       ! mol L-1
+      this%terms_(2,i_column,i_layer) = GAS_CONSTANT_L_ATM_MOL_K &
+                                        * temperature * cloud_water              ! L mol-1
+      this%terms_(3,i_column,i_layer) = v1                                       ! mol L-1 atm-1
+      this%terms_(4,i_column,i_layer) = v2                                       ! mol L-1
+      this%terms_(5,i_column,i_layer) = v3                                       ! mol L-1
 
-   end subroutine henrys_law_monoprotic_acid_set_conditions
+   end subroutine henrys_law_acid_set_conditions
 
    !-------------------------------------------------------------------------------
    ! Returns the equilibrium constant for the current conditions
    !
    ! K_eq = [A-][H+] is the equilibrium constant (mol^2 L-2)
    ! See description for henrys_law_monoprotic_acid_set_conditions for details.
-   pure elemental subroutine henrys_law_monoprotic_acid_equilibrium_constant( &
-         this, i_column, i_layer, h_plus_concentration, equilibrium_constant )
+   pure elemental subroutine henrys_law_acid_equilibrium_constant( this, &
+         i_column, i_layer, h_plus_concentration, equilibrium_constant )
       
-      class(henrys_law_monoprotic_acid_t), intent(in)  :: this
-      integer,  intent(in)  :: i_column
-      integer,  intent(in)  :: i_layer
-      real(r8), intent(in)  :: h_plus_concentration ! mol L-1
-      real(r8), intent(out) :: equilibrium_constant ! mol^2 L-2
+      class(henrys_law_acid_t), intent(in)  :: this
+      integer,                  intent(in)  :: i_column
+      integer,                  intent(in)  :: i_layer
+      real(r8),                 intent(in)  :: h_plus_concentration ! mol L-1
+      real(r8),                 intent(out) :: equilibrium_constant ! mol^2 L-2
 
+      real(r8) :: H_eff
+      call this%effective_henrys_law_constant( i_column, i_layer, &
+                                               h_plus_concentration, H_eff )
       equilibrium_constant = this%terms_(1,i_column,i_layer) &
-                           / (1._r8 + this%terms_(2,i_column,i_layer) &
-                              * (1._r8 + this%terms_(3,i_column,i_layer) &
-                                 / h_plus_concentration))
+                           / (1._r8 + H_eff * this%terms_(2,i_column,i_layer))
 
-   end subroutine henrys_law_monoprotic_acid_equilibrium_constant
+   end subroutine henrys_law_acid_equilibrium_constant
 
    !-------------------------------------------------------------------------------
    ! Returns the gas-phase mixing ratio (mol mol-1) for the current conditions after
    ! partitioning.
    !
    ! See description for henrys_law_monoprotic_acid_set_conditions for details.
-   pure elemental subroutine henrys_law_monoprotic_acid_gas_phase_mixing_ratio( &
+   pure elemental subroutine henrys_law_acid_gas_phase_mixing_ratio( &
          this, i_column, i_layer, h_plus_concentration, total_mixing_ratio, &
          gas_phase_mixing_ratio )
       
-      class(henrys_law_monoprotic_acid_t), intent(in)  :: this
-      integer,  intent(in)  :: i_column
-      integer,  intent(in)  :: i_layer
-      real(r8), intent(in)  :: total_mixing_ratio     ! mol mol-1
-      real(r8), intent(in)  :: h_plus_concentration   ! mol L-1
-      real(r8), intent(out) :: gas_phase_mixing_ratio ! mol mol-1
+      class(henrys_law_acid_t), intent(in)  :: this
+      integer,                  intent(in)  :: i_column
+      integer,                  intent(in)  :: i_layer
+      real(r8),                 intent(in)  :: total_mixing_ratio     ! mol mol-1
+      real(r8),                 intent(in)  :: h_plus_concentration   ! mol L-1
+      real(r8),                 intent(out) :: gas_phase_mixing_ratio ! mol mol-1
 
+      real(r8) :: H_eff
+      call this%effective_henrys_law_constant( i_column, i_layer, &
+                                               h_plus_concentration, H_eff )
       gas_phase_mixing_ratio = total_mixing_ratio &
-                             / (1._r8 + this%terms_(2,i_column,i_layer) &
-                                * (1._r8 + this%terms_(3,i_column,i_layer) &
-                                   / h_plus_concentration))
+                             / (1._r8 + H_eff * this%terms_(2,i_column,i_layer))
 
-   end subroutine henrys_law_monoprotic_acid_gas_phase_mixing_ratio
+   end subroutine henrys_law_acid_gas_phase_mixing_ratio
+
+   !-------------------------------------------------------------------------------
+   ! Returns the Effective Henry's Law constant for the current conditions
+   !
+   ! See description for henrys_law_acid_set_conditions for details.
+   pure elemental subroutine henrys_law_acid_effective_henrys_law_constant( this, &
+         i_column, i_layer, h_plus_concentration, effective_constant )
+      
+      class(henrys_law_acid_t), intent(in)  :: this
+      integer,                  intent(in)  :: i_column
+      integer,                  intent(in)  :: i_layer
+      real(r8),                 intent(in)  :: h_plus_concentration   ! mol L-1
+      real(r8),                 intent(out) :: effective_constant     ! mol L-1 atm-1
+
+      effective_constant = this%terms_(3,i_column,i_layer) &
+                         * (1._r8 + this%terms_(4,i_column,i_layer) &
+                            / h_plus_concentration &
+                            * (1._r8 + this%terms_(5,i_column,i_layer) &
+                               / h_plus_concentration))
+
+   end subroutine henrys_law_acid_effective_henrys_law_constant
 
 end module cloud_aqueous_chemistry
 
