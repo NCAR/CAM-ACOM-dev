@@ -20,3 +20,18 @@ create_standard_test(
     ../../../src/chemistry/modal_aero/sox_cldaero_mod.F90
   WORKING_DIRECTORY
     ${CMAKE_BINARY_DIR}/cloud_aqueous_chemistry)
+
+create_standard_test(
+  NAME cloud_aqueous_chemistry_full
+  SOURCES
+    test_cloud_aqueous_chemistry_full.F90
+    cloud_chemistry_dependencies_full.F90
+    ../file_io.F90
+    ../../../src/chemistry/aerosol/cloud_aqueous_chemistry.F90
+    ../../../src/chemistry/aerosol/cloud_utilities.F90
+    ../../../src/chemistry/modal_aero/mam_clouds.F90
+    ../../../src/chemistry/aerosol/mo_setsox.F90
+    ../../../src/chemistry/aerosol/cldaero_mod.F90
+    ../../../src/chemistry/modal_aero/sox_cldaero_mod.F90
+  WORKING_DIRECTORY
+    ${CMAKE_BINARY_DIR}/cloud_aqueous_chemistry)
