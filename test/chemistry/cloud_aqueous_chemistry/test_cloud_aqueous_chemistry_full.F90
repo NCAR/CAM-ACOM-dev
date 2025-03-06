@@ -334,6 +334,7 @@ contains
       do j = 1, size(chem_args(i)%qin, dim=2)
         do k = 1, size(chem_args(i)%qin, dim=3)
           chem_args(i)%qin(j,k,1) = 25.0e-9_r8 + 1.0e-10_r8 * (i + j + k) ! NH3 ~ 25 ppb
+          chem_args(i)%qin(j,k,2) = 10.0e-9_r8 + 1.0e-10_r8 * (i + j + k) ! HNO3 ~ 10 ppb
         end do
       end do
     end do

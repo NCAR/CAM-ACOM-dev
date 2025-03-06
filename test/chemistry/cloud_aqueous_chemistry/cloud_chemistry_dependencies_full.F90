@@ -54,6 +54,8 @@ contains
       get_spc_ndx = 8
     case ('NH3')
       get_spc_ndx = 1
+    case ('HNO3')
+      get_spc_ndx = 2
     case default
       get_spc_ndx = -1
     end select
