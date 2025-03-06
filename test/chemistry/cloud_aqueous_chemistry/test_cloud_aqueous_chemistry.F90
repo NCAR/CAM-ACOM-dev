@@ -178,6 +178,7 @@ contains
     integer :: i
 
     allocate(pbuf(n_columns_per_rank))
+    masterproc = .true.
     new_args = get_inputs()
     old_args = get_inputs()
     expected_outputs = get_expected_outputs()

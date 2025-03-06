@@ -67,6 +67,7 @@ contains
     use cloud_aqueous_chemistry, only: new_sox_inti => initialize, &
                                        new_setsox => calculate
     use mo_setsox, only: old_sox_inti => sox_inti, old_setsox => setsox
+    use chemistry_test_data, only: do_debug_logging
 
     type(chemistry_args), allocatable :: new_args(:), old_args(:)
     type(physics_buffer_desc), pointer :: pbuf(:)
@@ -79,6 +80,7 @@ contains
     call new_sox_inti()
     call old_sox_inti()
     do i = 1, size(new_args)
+      do_debug_logging = i == 4
       call new_setsox( &
           state, &
           pbuf, &
@@ -105,6 +107,7 @@ contains
         )
     end do
     do i = 1, size(old_args)
+      do_debug_logging = i == 4
       call old_setsox( &
           state, &
           pbuf, &
@@ -539,7 +542,7 @@ contains
                 absolute_tolerance)) then
               print *, 'qin mismatch at column ', (i-1)*j, ' and layer ', k, &
                 ' and species ', l, ' calculated: ', calculated(i)%qin(j,k,l), &
-                ' expected: ', expected(i)%qin(j,k,l)
+                ' expected: ', expected(i)%qin(j,k,l), i, j, k, l
               passed = .false.
             end if
           end do

@@ -2,6 +2,15 @@
 ! modified to include randomly generated data for species
 ! not included in the configuration used to generate the
 ! snapshot file.
+module chemistry_test_data
+  implicit none
+  public
+  logical :: do_debug_logging = .false.
+  integer, parameter :: debug_column = 13
+  integer, parameter :: debug_layer = 26
+  integer, parameter :: debug_species = 1
+end module chemistry_test_data
+
 module shr_kind_mod
   implicit none
   public :: shr_kind_r8

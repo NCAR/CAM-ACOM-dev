@@ -18,6 +18,7 @@ module cloud_aqueous_chemistry
   use cam_logfile,       only : iulog
   use physics_buffer,    only: physics_buffer_desc
   use physics_types,     only: physics_state
+  use chemistry_test_data
 
   implicit none
 
@@ -37,6 +38,7 @@ module cloud_aqueous_chemistry
   contains
     procedure :: exists => cloud_species_exists
     procedure :: mixing_ratio => cloud_species_get_mixing_ratio
+    procedure :: print => cloud_species_print
   end type cloud_species_t
 
   interface cloud_species_t
@@ -49,10 +51,10 @@ module cloud_aqueous_chemistry
   logical :: cloud_borne = .false.
 
   ! Constants that should be moved to a common module
-  real(r8), parameter :: AVOGADRO = 6.02214129e23_r8 ! mol-1
+  real(r8), parameter :: AVOGADRO = 6.023e23_r8 ! 6.02214076e23_r8 ! mol-1
+  real(r8), parameter :: BOLTZMANN = 1.38e-23_r8 ! 1.380649e-23_r8 ! J K-1
   real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8
-  real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314.46261815324_r8*PASCAL_TO_ATM
-  real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8 ! J K-1
+  real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314._r8*PASCAL_TO_ATM ! BOLTZMANN*AVAGADRO*1000.0_r8*PASCAL_TO_ATM
   real(r8), parameter :: GAS_CONSTANT_DRY_AIR_J_KG_K = 287.0_r8 ! J kg-1 K-1
   real(r8), parameter :: SMALL_NUMBER = 1.e-30_r8 ! unitless
 
@@ -120,6 +122,19 @@ contains
     if (.not. do_cloud_aqueous_chemistry) return
     
     call sox_cldaero_init()
+
+    if (masterproc) then
+    write(iulog,*) 'Cloud chemistry: is_cloud_borne = ', cloud_borne
+    call so2%print(iulog)
+    call nh3%print(iulog)
+    call hno3%print(iulog)
+    call h2o2%print(iulog)
+    call o3%print(iulog)
+    call ho2%print(iulog)
+    call msa%print(iulog)
+    call so4%print(iulog)
+    call h2so4%print(iulog)
+    end if
 
   end subroutine initialize
 
@@ -424,6 +439,17 @@ contains
              fact1_nh3 = (xk*xe*patm/water_dissociation_constant)*(xnh3(i,k)+xnh4(i,k))
              fact2_nh3 = xk*GAS_CONSTANT_L_ATM_MOL_K*temperature(i,k)*xl
              fact3_nh3 = xe/water_dissociation_constant
+             if (do_debug_logging .and. debug_column == i .and. debug_layer == k) then
+               write(iulog,*) 'Cloud chemistry: xk = ', xk, i, k
+               write(iulog,*) 'Cloud chemistry: xe = ', xe, i, k
+               write(iulog,*) 'Cloud chemistry: GAS_CONSTANT_L_ATM_MOL_K = ', GAS_CONSTANT_L_ATM_MOL_K, i, k
+               write(iulog,*) 'Cloud chemistry: temperature = ', temperature(i,k), i, k
+               write(iulog,*) 'Cloud chemistry: xl = ', xl, i, k
+               write(iulog,*) 'Cloud chemistry: work1 = ', work1(i), i, k
+               write(iulog,*) 'Cloud chemistry: fact1_nh3 = ', fact1_nh3, i, k
+               write(iulog,*) 'Cloud chemistry: fact2_nh3 = ', fact2_nh3, i, k
+               write(iulog,*) 'Cloud chemistry: fact3_nh3 = ', fact3_nh3, i, k
+             end if
 
              !-----------------------------------------------------------------
              !        ... h2o effects
@@ -495,6 +521,15 @@ contains
                 !-----------------------------------------------------------------
                 Enh3 = fact1_nh3/(1.0_r8 + fact2_nh3*(1.0_r8 + fact3_nh3*xph(i,k)))
 
+                if (do_debug_logging .and. debug_column == i .and. debug_layer == k) then
+                  write(iulog,*) 'Cloud chemistry: iter = ', iter
+                  write(iulog,*) 'Cloud chemistry: fact1_nh3 = ', fact1_nh3
+                  write(iulog,*) 'Cloud chemistry: fact2_nh3 = ', fact2_nh3
+                  write(iulog,*) 'Cloud chemistry: fact3_nh3 = ', fact3_nh3
+                  write(iulog,*) 'Cloud chemistry: Enh3 = ', Enh3
+                  write(iulog,*) 'Cloud chemistry: xph = ', xph(i,k)
+                end if
+
                 tmp_nh4  = Enh3 * xph(i,k)
                 tmp_hso3 = Eso2 / xph(i,k)
                 tmp_so3  = tmp_hso3 * 2.0_r8*fact4_so2/xph(i,k)
@@ -506,6 +541,22 @@ contains
                 tmp_neg = tmp_oh + tmp_hco3 + tmp_no3 + tmp_hso3 + tmp_so3 + tmp_so4
 
                 ynetpos = tmp_pos - tmp_neg
+
+                if (do_debug_logging .and. debug_column == i .and. debug_layer == k) then
+                  write(iulog,*) 'Cloud chemistry: iter = ', iter, ' yph = ', yph, ' ynetpos = ', ynetpos
+                  write(iulog,*) 'Cloud chemistry: Enh3 = ', Enh3
+                  write(iulog,*) 'Cloud chemistry: xph = ', xph(i,k)
+                  write(iulog,*) 'Cloud chemistry: tmp_nh4 = ', tmp_nh4
+                  write(iulog,*) 'Cloud chemistry: tmp_hso3 = ', tmp_hso3
+                  write(iulog,*) 'Cloud chemistry: tmp_so3 = ', tmp_so3
+                  write(iulog,*) 'Cloud chemistry: tmp_hco3 = ', tmp_hco3
+                  write(iulog,*) 'Cloud chemistry: tmp_oh = ', tmp_oh
+                  write(iulog,*) 'Cloud chemistry: tmp_no3 = ', tmp_no3
+                  write(iulog,*) 'Cloud chemistry: tmp_so4 = ', tmp_so4
+                  write(iulog,*) 'Cloud chemistry: tmp_pos = ', tmp_pos
+                  write(iulog,*) 'Cloud chemistry: tmp_neg = ', tmp_neg
+                  write(iulog,*) 'Cloud chemistry: ynetpos = ', ynetpos
+                end if
 
 
                 ! yposnet = net positive ions/charge
@@ -575,6 +626,10 @@ contains
           end if
        end do col_loop0
     end do ver_loop0 ! end pver loop for STEP 0
+
+    if (do_debug_logging) then
+      write(iulog,*) 'Cloud chemistry xnh3(',debug_column,',',debug_layer,') = ', xnh3(debug_column,debug_layer)
+    end if
 
     !==============================================================
     !          ... Now use the actual PH
@@ -888,6 +943,25 @@ contains
       end if
 
    end subroutine cloud_species_get_mixing_ratio
+
+   !-------------------------------------------------------------------------------
+   ! Prints the cloud species object
+   subroutine cloud_species_print( this, iulog )
+   
+      class(cloud_species_t), intent(in) :: this
+      integer,                intent(in) :: iulog ! File unit for output
+   
+      if ( this%state_index_ == CLOUD_INDEX_UNDEFINED ) then
+         write(iulog,*) 'Cloud species ', this%name_, ' is not defined'
+      else if ( this%is_constant_ ) then
+         write(iulog,*) 'Cloud species ', this%name_, ' is constant index: ', &
+                        this%state_index_
+      else
+         write(iulog,*) 'Cloud species ', this%name_, ' is time-varying index: ', &
+                        this%state_index_
+      end if
+
+   end subroutine cloud_species_print
 
 end module cloud_aqueous_chemistry
 

@@ -4,6 +4,7 @@ module mo_setsox
   use cam_logfile,  only : iulog
   use physics_buffer,only: physics_buffer_desc, pbuf_get_index, pbuf_add_field, dtype_r8
   use physics_types,     only: physics_state
+  use chemistry_test_data
 
   implicit none
 
@@ -110,6 +111,17 @@ contains
 
     if (masterproc) then
        write(iulog,*) 'sox_inti: has_sox = ',has_sox
+    write(iulog,*) 'sox_inti: cloud_borne = ', cloud_borne
+    write(iulog,*) 'sox_inti: SO2', inv_so2, id_so2
+    write(iulog,*) 'sox_inti: NH3', inv_nh3, id_nh3
+    write(iulog,*) 'sox_inti: HNO3', inv_hno3, id_hno3
+    write(iulog,*) 'sox_inti: H2O2', inv_h2o2, id_h2o2
+    write(iulog,*) 'sox_inti: O3', inv_o3, id_o3
+    write(iulog,*) 'sox_inti: HO2', inv_ho2, id_ho2
+    write(iulog,*) 'sox_inti: MSA', id_msa
+    write(iulog,*) 'sox_inti: SO4', id_so4
+    write(iulog,*) 'sox_inti: H2SO4', id_h2so4
+
     endif
 
     if( has_sox ) then
@@ -371,6 +383,10 @@ contains
 
     end do
 
+    if (do_debug_logging) then
+      write(iulog,*) 'setsox: xnh3(',debug_column,',',debug_layer,') = ',xnh3(debug_column,debug_layer)
+    end if
+
     !-----------------------------------------------------------------
     !       ... Temperature dependent Henry constants
     !-----------------------------------------------------------------
@@ -477,6 +493,17 @@ contains
              fact1_nh3 = (xk*xe*patm/xkw)*(xnh3(i,k)+xnh4(i,k))
              fact2_nh3 = xk*ra*tz*xl
              fact3_nh3 = xe/xkw
+             if (do_debug_logging .and. debug_column == i .and. debug_layer == k) then
+               write(iulog,*) 'setsox: xk = ',xk, i, k
+               write(iulog,*) 'setsox: xe = ',xe, i, k
+               write(iulog,*) 'setsox: ra = ',ra, i, k
+               write(iulog,*) 'setsox: tz = ',tz, i, k
+               write(iulog,*) 'setsox: xl = ',xl, i, k
+               write(iulog,*) 'setsox: work1 = ',work1(i), i, k
+               write(iulog,*) 'setsox: fact1_nh3 = ',fact1_nh3, i, k
+               write(iulog,*) 'setsox: fact2_nh3 = ',fact2_nh3, i, k
+               write(iulog,*) 'setsox: fact3_nh3 = ',fact3_nh3, i, k
+             end if
 
              !-----------------------------------------------------------------
              !        ... h2o effects
@@ -547,6 +574,14 @@ contains
                 !          ... nh3
                 !-----------------------------------------------------------------
                 Enh3 = fact1_nh3/(1.0_r8 + fact2_nh3*(1.0_r8 + fact3_nh3*xph(i,k)))
+                if (do_debug_logging .and. debug_column == i .and. debug_layer == k) then
+                  write(iulog,*) 'setsos: iter=',iter
+                  write(iulog,*) 'setsos: fact1_nh3=',fact1_nh3
+                  write(iulog,*) 'setsos: fact2_nh3=',fact2_nh3
+                  write(iulog,*) 'setsos: fact3_nh3=',fact3_nh3
+                  write(iulog,*) 'setsos: Enh3=',Enh3
+                  write(iulog,*) 'setsos: xph=',xph(i,k)
+                end if
 
                 tmp_nh4  = Enh3 * xph(i,k)
                 tmp_hso3 = Eso2 / xph(i,k)
@@ -559,6 +594,22 @@ contains
                 tmp_neg = tmp_oh + tmp_hco3 + tmp_no3 + tmp_hso3 + tmp_so3 + tmp_so4
 
                 ynetpos = tmp_pos - tmp_neg
+
+                if (do_debug_logging .and. debug_column == i .and. debug_layer == k) then
+                   write(iulog,*) 'setsox: iter=',iter,' yph=',yph,' ynetpos=',ynetpos
+                   write(iulog,*) 'setsox: Enh3=',Enh3
+                   write(iulog,*) 'setsox: xph=',xph(i,k)
+                   write(iulog,*) 'setsox: tmp_nh4=',tmp_nh4
+                   write(iulog,*) 'setsox: tmp_hso3=',tmp_hso3
+                   write(iulog,*) 'setsox: tmp_so3=',tmp_so3
+                   write(iulog,*) 'setsox: tmp_hco3=',tmp_hco3
+                   write(iulog,*) 'setsox: tmp_oh=',tmp_oh
+                   write(iulog,*) 'setsox: tmp_no3=',tmp_no3
+                   write(iulog,*) 'setsox: tmp_so4=',tmp_so4
+                   write(iulog,*) 'setsox: tmp_pos=',tmp_pos
+                   write(iulog,*) 'setsox: tmp_neg=',tmp_neg
+                   write(iulog,*) 'setsox: ynetpos=',ynetpos
+                end if
 
 
                 ! yposnet = net positive ions/charge
