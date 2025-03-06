@@ -1,4 +1,12 @@
 ! Mocked dependencies of cloud aqueous chemistry module
+module chemistry_test_data
+  implicit none
+  public
+  logical :: do_debug_logging = .false.
+  integer :: debug_column = -1
+  integer :: debug_level = -1
+end module chemistry_test_data
+
 module shr_kind_mod
   implicit none
   public :: shr_kind_r8
