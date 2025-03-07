@@ -55,8 +55,7 @@ module cloud_aqueous_chemistry
     real(r8) :: B_ = 0.0_r8
   end type van_t_hoff_t
 
-  !> Henry's Law parameters for acids and bases
-  !!
+  !> @brief Henry's Law parameters for acids and bases
   !! Calculates an equilibrium concentration of the dissociated acid based on the
   !! pH of the solution. The equilibrium constant is given by:
   !! K_eq = [H+][A-] (mono-protic acid)
@@ -277,7 +276,7 @@ contains
     type(henrys_law_t) :: hl_hno3, hl_so2, hl_nh3
 
     ! Equilibrium constants used to determine condensed phase ion concentrations [various units]
-    real(r8) :: Eso2, Eso4, Ehno3, Eco2, Eh2o, Enh3
+    real(r8) :: Eso2, Eso4, Ehno3, Eco2, Enh3
 
     ! Calculated gas-phase mixing ratios (mol mol-1)
     real(r8) :: hno3g(ncol,pver), nh3g(ncol,pver)
@@ -434,11 +433,6 @@ contains
              call hl_nh3%set_conditions(  i, k, temperature(i,k), patm, xl, xnh3(i,k) + xnh4(i,k) )
 
              !-----------------------------------------------------------------
-             !        ... h2o effects
-             !-----------------------------------------------------------------
-             Eh2o = WATER_DISSOCIATION_CONSTANT
-
-             !-----------------------------------------------------------------
              !        ... co2 effects
              !-----------------------------------------------------------------
              ! This could use the CO2 from the model state.
@@ -510,7 +504,7 @@ contains
                   !       for so4 when solving the electro-neutrality equation
                 tmp_so3  = tmp_hso3 * 2.0_r8*hl_so2%terms_(5,i,k)/xph(i,k)
                 tmp_hco3 = Eco2 / xph(i,k)
-                tmp_oh   = Eh2o / xph(i,k)
+                tmp_oh   = WATER_DISSOCIATION_CONSTANT / xph(i,k)
                 tmp_no3  = Ehno3 / xph(i,k)
                 tmp_so4 = cloud_composition%so4_fact*Eso4
                 tmp_pos = xph(i,k) + tmp_nh4
@@ -942,8 +936,8 @@ contains
       v3 = this%second_dissociation_factor_%A_ &
            * exp( this%second_dissociation_factor_%B_ * temp_delta )             ! mol L-1
       v4_kw = this%protonation_factor_%A_ &
-             * exp( this%protonation_factor_%B_ * temp_delta ) / &
-             WATER_DISSOCIATION_CONSTANT                                         ! mol L-1
+              * exp( this%protonation_factor_%B_ * temp_delta ) / &
+              WATER_DISSOCIATION_CONSTANT                                         ! mol L-1
       this%terms_(1,i_column,i_layer) = v1 * (v2 + v4_kw) &
                                         * pressure * total_mixing_ratio          ! mol^2 L-2 (acid) or unitless (base)
       this%terms_(2,i_column,i_layer) = GAS_CONSTANT_L_ATM_MOL_K &
