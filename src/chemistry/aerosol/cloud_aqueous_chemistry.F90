@@ -56,6 +56,13 @@ module cloud_aqueous_chemistry
     real(r8) :: B_ = 0.0_r8
   end type van_t_hoff_t
 
+  !> @brief Henry's Law types
+  integer, parameter :: HENRYS_LAW_UNDEFINED = 0
+  integer, parameter :: HENRYS_LAW_MONOPROTIC_ACID = 1
+  integer, parameter :: HENRYS_LAW_DIPROTIC_ACID = 2
+  integer, parameter :: HENRYS_LAW_BASE = 3
+  integer, parameter :: HENRYS_LAW_NEUTRAL = 4
+
   !> @brief Henry's Law parameters for acids and bases
   !! Calculates an equilibrium concentration of the dissociated acid based on the
   !! pH of the solution. The equilibrium constant is given by:
@@ -66,6 +73,7 @@ module cloud_aqueous_chemistry
   !! Also, calculates the gas-phase mixing ratio (mol mol-1) of the acid based
   !! on the Henry's Law constant and the total mixing ratio.
   type :: henrys_law_t
+    integer :: type_ = HENRYS_LAW_UNDEFINED
     type(van_t_hoff_t) :: partitioning_factor_       ! A = mol L-1 atm-1, B = K
     type(van_t_hoff_t) :: first_dissociation_factor_ ! A = mol L-1, B = K
     type(van_t_hoff_t) :: second_dissociation_factor_! A = mol L-1, B = K
@@ -101,14 +109,12 @@ module cloud_aqueous_chemistry
 
 contains
 
-!-----------------------------------------------------------------------
-!-----------------------------------------------------------------------
+  !-----------------------------------------------------------------------
+  !	Prepares for cloud aqueous chemistry
+  ! - Looks up cloud chemistry species
+  ! - Determines if enough species are present to perform cloud chemistry
+  !-----------------------------------------------------------------------
   subroutine initialize()
-    !-----------------------------------------------------------------------
-    !	... prepare for cloud aqueous chemistry
-    ! - Look up cloud chemistry species
-    ! - Determine if enough species are present to perform cloud chemistry
-    !-----------------------------------------------------------------------
 
     use spmd_utils,      only : masterproc
     use phys_control,    only : phys_getopts
@@ -167,12 +173,12 @@ contains
 
   end subroutine initialize
 
-!-----------------------------------------------------------------------
-! Calculates the formation of sulfate and updates sulfate concentrations
-! due to cloud aqueous chemistry. Also outputs the production rates
-! (kg m-2 s-1) of various reactions of sulfur species with various
-! oxidants (e.g., H2O2(aq), H2SO4(aq)). 
-!-----------------------------------------------------------------------
+  !-----------------------------------------------------------------------
+  ! Calculates the formation of sulfate and updates sulfate concentrations
+  ! due to cloud aqueous chemistry. Also outputs the production rates
+  ! (kg m-2 s-1) of various reactions of sulfur species with various
+  ! oxidants (e.g., H2O2(aq), H2SO4(aq)). 
+  !-----------------------------------------------------------------------
   subroutine calculate( state,         &
        pbuf,                           &
        ncol,                           &
@@ -276,7 +282,7 @@ contains
     real(r8) :: change_in_aq_so4_mixing_ratio(ncol,pver)
 
     ! Partitioning calculators
-    type(henrys_law_t) :: hl_hno3, hl_so2, hl_nh3
+    type(henrys_law_t) :: hl_hno3, hl_so2, hl_nh3, hl_co2
 
     ! Equilibrium constants used to determine condensed phase ion concentrations [various units]
     real(r8) :: Eso2, Eso4, Ehno3, Eco2, Enh3
@@ -339,6 +345,7 @@ contains
     ! Sander, R., 2015. Compilation of Henry's law constants (version 4) for water as solvent.
     ! Atmos. Chem. Phys., 15, 4399–4981, 2015. DOI: 10.5194/acp-15-4399-2015
     hl_hno3 = henrys_law_t( ncol, pver )
+    hl_hno3%type_ = HENRYS_LAW_MONOPROTIC_ACID
     hl_hno3%partitioning_factor_%A_ = 2.1e5_r8
     hl_hno3%partitioning_factor_%B_ = 8700.0_r8
     hl_hno3%first_dissociation_factor_%A_ = 15.4_r8    ! TODO: Find reference - could be related to Ka of HNO3
@@ -348,6 +355,7 @@ contains
     !
     ! TODO: Find reference for these values
     hl_so2 = henrys_law_t( ncol, pver )
+    hl_so2%type_ = HENRYS_LAW_DIPROTIC_ACID
     hl_so2%partitioning_factor_%A_ = 1.23e3_r8
     hl_so2%partitioning_factor_%B_ = 3120.0_r8
     hl_so2%first_dissociation_factor_%A_ = 1.7e-2_r8
@@ -359,10 +367,21 @@ contains
     !
     ! TODO: Find reference for these values
     hl_nh3 = henrys_law_t( ncol, pver )
+    hl_nh3%type_ = HENRYS_LAW_BASE
     hl_nh3%partitioning_factor_%A_ = 58.0_r8
     hl_nh3%partitioning_factor_%B_ = 4085.0_r8
     hl_nh3%protonation_factor_%A_ = 1.7e-5_r8
     hl_nh3%protonation_factor_%B_ = -4325.0_r8
+
+    ! CO2 partitioning parameters
+    !
+    ! TODO: Find reference for these values
+    hl_co2 = henrys_law_t( ncol, pver )
+    hl_co2%type_ = HENRYS_LAW_NEUTRAL
+    hl_co2%partitioning_factor_%A_ = 3.1e-2_r8
+    hl_co2%partitioning_factor_%B_ = 2423.0_r8
+    hl_co2%first_dissociation_factor_%A_ = 4.3e-7_r8
+    hl_co2%first_dissociation_factor_%B_ = -913.0_r8
 
     !==================================================================
     !       ... First set the PH
@@ -941,13 +960,27 @@ contains
 
       v1 = this%partitioning_factor_%A_ &
            * exp( this%partitioning_factor_%B_ * temp_delta )                    ! mol L-1 atm-1
-      v2 = this%first_dissociation_factor_%A_ &
-           * exp( this%first_dissociation_factor_%B_ * temp_delta )              ! mol L-1
-      v3 = this%second_dissociation_factor_%A_ &
-           * exp( this%second_dissociation_factor_%B_ * temp_delta )             ! mol L-1
-      v4_kw = this%protonation_factor_%A_ &
-              * exp( this%protonation_factor_%B_ * temp_delta ) / &
-              WATER_DISSOCIATION_CONSTANT                                         ! mol L-1
+      if (this%type_ == HENRYS_LAW_MONOPROTIC_ACID .or. &
+          this%type_ == HENRYS_LAW_DIPROTIC_ACID) then
+         v2 = this%first_dissociation_factor_%A_ &
+              * exp( this%first_dissociation_factor_%B_ * temp_delta )           ! mol L-1
+         if (this%type_ == HENRYS_LAW_DIPROTIC_ACID) then
+            v3 = this%second_dissociation_factor_%A_ &
+                 * exp( this%second_dissociation_factor_%B_ * temp_delta )       ! mol L-1
+         else
+            v3 = 0._r8
+         end if
+      else
+         v2 = 0._r8
+         v3 = 0._r8
+      end if
+      if (this%type_ == HENRYS_LAW_BASE) then
+         v4_kw = this%protonation_factor_%A_ &
+                 * exp( this%protonation_factor_%B_ * temp_delta ) / &
+                 WATER_DISSOCIATION_CONSTANT                                     ! mol L-1
+      else
+         v4_kw = 0._r8
+      end if
       this%terms_(1,i_column,i_layer) = v1 * (v2 + v4_kw) &
                                         * pressure * total_mixing_ratio          ! mol^2 L-2 (acid) or unitless (base)
       this%terms_(2,i_column,i_layer) = GAS_CONSTANT_L_ATM_MOL_K &
@@ -1018,13 +1051,20 @@ contains
       real(r8),            intent(in)  :: h_plus_concentration   ! mol L-1
       real(r8),            intent(out) :: effective_constant     ! mol L-1 atm-1
 
-      effective_constant = this%terms_(3,i_column,i_layer) &
+      if (this%type_ == HENRYS_LAW_MONOPROTIC_ACID .or. &
+          this%type_ == HENRYS_LAW_DIPROTIC_ACID) then
+         effective_constant = this%terms_(3,i_column,i_layer) &
                          * (1._r8 + this%terms_(4,i_column,i_layer) &
                             / h_plus_concentration &
                             * (1._r8 + this%terms_(5,i_column,i_layer) &
-                               / h_plus_concentration)) &
+                               / h_plus_concentration))
+      else if (this%type_ == HENRYS_LAW_BASE) then
+         effective_constant = this%terms_(3,i_column,i_layer) &
                          * (1._r8 + this%terms_(6,i_column,i_layer) &
-                            * h_plus_concentration )
+                            * h_plus_concentration)
+      else
+         effective_constant = 0._r8
+      end if
 
    end subroutine henrys_law_effective_henrys_law_constant
 
