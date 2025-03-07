@@ -35,6 +35,7 @@ module cloud_aqueous_chemistry
     character(len=:), allocatable :: name_
     integer :: state_index_ = CLOUD_INDEX_UNDEFINED ! index in the state vector or the fixed concentrations array
     logical :: is_constant_ = .false.
+    real(r8) :: default_mixing_ratio_ = 0.0_r8 ! mol mol-1
   contains
     procedure :: exists => cloud_species_exists
     procedure :: mixing_ratio => cloud_species_get_mixing_ratio
@@ -82,7 +83,8 @@ module cloud_aqueous_chemistry
     module procedure :: henrys_law_constructor
   end interface henrys_law_t
     
-  type(cloud_species_t) :: so2, nh3, hno3, h2o2, o3, ho2, msa, so4, h2so4
+  ! FUTURE_ANSWER_CHANGING_MODIFICATION - This will lead to the actual CO2 value being used, if available
+  type(cloud_species_t) :: so2, nh3, hno3, h2o2, o3, ho2, msa, so4, h2so4, co2
 
   ! TODO: Figure out what this flag is for
   logical :: cloud_borne = .false.
@@ -132,6 +134,7 @@ contains
     msa   = cloud_species_t( 'MSA'   )
     so4   = cloud_species_t( 'SO4'   )
     h2so4 = cloud_species_t( 'H2SO4' )
+    co2   = cloud_species_t( 'CO2',  default_mixing_ratio=330.0e-6_r8 )
 
     do_cloud_aqueous_chemistry = so2%exists() .and. h2o2%exists() .and. &
                                  o3%exists() .and. ho2%exists()
@@ -285,7 +288,7 @@ contains
     integer  :: k, i, iter
     real(r8) :: xk, xe, x2
     real(r8) :: xl, px, patm
-    real(r8) :: so2g, h2o2g, co2g, o3g
+    real(r8) :: so2g, h2o2g, o3g
     real(r8) :: k_siv_h2o2  ! rate constant for reaction of S(IV) with H2O2
     real(r8) :: k_siv_o3    ! rate constant for reaction of S(IV) with O3
     real(r8) :: dso4_dt     ! rate of change of SO4
@@ -301,7 +304,7 @@ contains
 
     ! volume mixing ratios for cloud chemistry species
     real(r8), dimension(ncol,pver) ::  xhno3, xh2o2, xso2, xso4, xno3, &
-         xnh3, xnh4, xo3, xph, xho2, xh2so4, xmsa, xso4_init
+         xnh3, xnh4, xo3, xph, xho2, xh2so4, xmsa, xco2, xso4_init
 
     real(r8), dimension(ncol,pver) :: air_mass_density_kg_l ! kg L-1
     
@@ -388,6 +391,7 @@ contains
     call msa%mixing_ratio(   species_vmr, fixed_concentrations, air_number_density, xmsa   )
     call so4%mixing_ratio(   species_vmr, fixed_concentrations, air_number_density, xso4   )
     call h2so4%mixing_ratio( species_vmr, fixed_concentrations, air_number_density, xh2so4 )
+    call co2%mixing_ratio(   species_vmr, fixed_concentrations, air_number_density, xco2   )
 
     xph(:,:) = 10._r8**(-INITIAL_PH)                                ! initial PH value
 
@@ -437,10 +441,9 @@ contains
              !-----------------------------------------------------------------
              ! This could use the CO2 from the model state.
              ! FUTURE_ANSWER_CHANGING_MODIFICATION
-             co2g = 330.e-6_r8                            !330 ppm = 330.e-6 atm
              xk = 3.1e-2_r8*EXP( 2423._r8*work1(i) )
              xe = 4.3e-7_r8*EXP(-913._r8 *work1(i) )
-             Eco2 = xk*xe*co2g  *patm
+             Eco2 = xk*xe*xco2(i,k)*patm
 
              !-----------------------------------------------------------------
              !         ... so4 effect
@@ -799,12 +802,16 @@ contains
    !
    ! The name is used to determine the species index in the state arrays.
    ! If the species is not found, the index is set to CLOUD_INDEX_UNDEFINED.
-   function cloud_species_constructor( species_name ) result( this )
+   ! If a default mixing ratio is provided, it is used when the species is not
+   ! found in the state arrays. Otherwise, the mixing ratio is set to zero.
+   function cloud_species_constructor( species_name, default_mixing_ratio ) &
+         result( this )
    
       use mo_chem_utls, only : get_spc_ndx, get_inv_ndx
    
-      type(cloud_species_t) :: this
-      character(len=*), intent(in) :: species_name
+      type(cloud_species_t)          :: this
+      character(len=*),   intent(in) :: species_name
+      real(r8), optional, intent(in) :: default_mixing_ratio ! mol mol-1
    
       this%name_ = species_name
       this%state_index_ = get_inv_ndx( species_name )
@@ -812,6 +819,9 @@ contains
       if ( .not. this%is_constant_ ) &
           this%state_index_ = get_spc_ndx( species_name )
       if ( this%state_index_ <= 0 ) this%state_index_ = CLOUD_INDEX_UNDEFINED
+      if ( present(default_mixing_ratio) ) then
+         this%default_mixing_ratio_ = default_mixing_ratio
+      end if
    
    end function cloud_species_constructor
 
@@ -843,7 +853,7 @@ contains
       real(r8), intent(out) :: mixing_ratio(:,:)           ! species mixing ratio (mol mol-1) [column, layer]
       
       if ( this%state_index_ == CLOUD_INDEX_UNDEFINED ) then
-         mixing_ratio(:,:) = 0._r8
+         mixing_ratio(:,:) = this%default_mixing_ratio_
          return
       end if
       if ( this%is_constant_ ) then
