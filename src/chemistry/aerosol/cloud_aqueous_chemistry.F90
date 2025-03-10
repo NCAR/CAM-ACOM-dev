@@ -140,6 +140,8 @@ contains
     msa   = cloud_species_t( 'MSA'   )
     so4   = cloud_species_t( 'SO4'   )
     h2so4 = cloud_species_t( 'H2SO4' )
+    ! This will use the CO2 from the model state if available, unlike the original hard-coded value
+    ! FUTURE_ANSWER_CHANGING_MODIFICATION
     co2   = cloud_species_t( 'CO2',  default_mixing_ratio=330.0e-6_r8 )
 
     do_cloud_aqueous_chemistry = so2%exists() .and. h2o2%exists() .and. &
@@ -454,15 +456,7 @@ contains
              call hl_hno3%set_conditions( i, k, temperature(i,k), patm, xl, xhno3(i,k) )
              call hl_so2%set_conditions(  i, k, temperature(i,k), patm, xl, xso2(i,k)  )
              call hl_nh3%set_conditions(  i, k, temperature(i,k), patm, xl, xnh3(i,k) + xnh4(i,k) )
-
-             !-----------------------------------------------------------------
-             !        ... co2 effects
-             !-----------------------------------------------------------------
-             ! This could use the CO2 from the model state.
-             ! FUTURE_ANSWER_CHANGING_MODIFICATION
-             xk = 3.1e-2_r8*EXP( 2423._r8*work1(i) )
-             xe = 4.3e-7_r8*EXP(-913._r8 *work1(i) )
-             Eco2 = xk*xe*xco2(i,k)*patm
+             call hl_co2%set_conditions(  i, k, temperature(i,k), patm, xl, xco2(i,k) )
 
              !-----------------------------------------------------------------
              !         ... so4 effect
@@ -510,6 +504,7 @@ contains
                 call hl_hno3%equilibrium_constant( i, k, xph(i,k), Ehno3 )
                 call hl_so2%equilibrium_constant(  i, k, xph(i,k), Eso2  )
                 call hl_nh3%equilibrium_constant(  i, k, xph(i,k), Enh3  )
+                call hl_co2%equilibrium_constant(  i, k, xph(i,k), Eco2  )
 
                 tmp_nh4  = Enh3 * xph(i,k)
                 tmp_hso3 = Eso2 / xph(i,k)
@@ -961,7 +956,8 @@ contains
       v1 = this%partitioning_factor_%A_ &
            * exp( this%partitioning_factor_%B_ * temp_delta )                    ! mol L-1 atm-1
       if (this%type_ == HENRYS_LAW_MONOPROTIC_ACID .or. &
-          this%type_ == HENRYS_LAW_DIPROTIC_ACID) then
+          this%type_ == HENRYS_LAW_DIPROTIC_ACID .or. &
+          this%type_ == HENRYS_LAW_NEUTRAL) then
          v2 = this%first_dissociation_factor_%A_ &
               * exp( this%first_dissociation_factor_%B_ * temp_delta )           ! mol L-1
          if (this%type_ == HENRYS_LAW_DIPROTIC_ACID) then
