@@ -136,13 +136,8 @@ contains
             + qcw(:,:,id_so4_2a) &
             + qcw(:,:,id_so4_3a)
 
-        ! for 3-mode, so4 is assumed to be nh4hso4
-        ! the partial neutralization of so4 is handled by using a
-        !    -1 charge (instead of -2) in the electro-neutrality equation
-       conc_obj%nh4c(:ncol,:) = 0._r8
-
-       ! with 3-mode, assume so4 is nh4hso4, and so half-neutralized
-       conc_obj%so4_fact = 1._r8
+       ! for 3-mode, so4 is assumed to be nh4hso4
+       conc_obj%nh4c(:ncol,:) = conc_obj%so4c(:ncol,:)
 
     endif
 

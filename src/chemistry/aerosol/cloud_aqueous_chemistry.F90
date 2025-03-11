@@ -248,7 +248,7 @@ contains
     real(r8),         intent(in)    :: pressure_thickness(:,:)         ! pressure thickness of levels (Pa) [pdel elsewhere in CAM]
     real(r8),         intent(in)    :: temperature(:,:)                ! temperature (K) [tfld elsewhere in CAM]
     real(r8),         intent(in)    :: mean_mass(:,:)                  ! mean wet atmospheric mass (amu)
-    real(r8), target, intent(in)    :: cloud_water(:,:)                ! cloud liquid water content (kg/kg)
+    real(r8), target, intent(in)    :: cloud_water(:,:)                ! cloud liquid water content (kg_water/kg_air)
     real(r8), target, intent(in)    :: cloud_fraction(:,:)             ! cloud fraction (unitless)
     real(r8),         intent(in)    :: cloud_droplet_number(:,:)       ! droplet number concentration (#/kg)
     real(r8),         intent(in)    :: air_number_density(:,:)         ! total atmospheric number density (/cm**3)
@@ -435,10 +435,6 @@ contains
              !-----------------------------------------------------------------
              ! 21-mar-2011 changes by rce
              ! ph calculation now uses bisection method to solve the electro-neutrality equation
-             ! 3-mode aerosols (where so4 is assumed to be nh4hso4)
-             !    old code set xnh4c = so4c
-             !    new code sets xnh4c = 0, then uses a -1 charge (instead of -2)
-             !       for so4 when solving the electro-neutrality equation
              !-----------------------------------------------------------------
 
              !-----------------------------------------------------------------
@@ -461,8 +457,8 @@ contains
              !-----------------------------------------------------------------
              !         ... so4 effect
              !-----------------------------------------------------------------
-             Eso4 = xso4(i,k)*air_number_density(i,k)   &         ! /cm3(a)
-                  * (1.e3_r8/AVOGADRO) / xl
+             Eso4 = xso4(i,k)*air_number_density(i,k)   &         ! 
+                    * (1.e3_r8/AVOGADRO) / xl                     ! mol(so4)/L(w)
 
 
              !-----------------------------------------------------------------
@@ -508,17 +504,6 @@ contains
 
                 tmp_nh4  = Enh3 * xph(i,k)
                 tmp_hso3 = Eso2 / xph(i,k)
-                ! TODO: From the original notes, it looks like the following line
-                ! should be:
-                ! tmp_so3  = 0.5 * (tmp_hso3 * 2.0_r8*hl_so2%term_(5,i,k)/xph(i,k))
-                ! Saw this note from above, which might explain this, but
-                ! we should make this more clear in this part of the code:
-                  ! 21-mar-2011 changes by rce
-                  ! ph calculation now uses bisection method to solve the electro-neutrality equation
-                  ! 3-mode aerosols (where so4 is assumed to be nh4hso4)
-                  !    old code set xnh4c = so4c
-                  !    new code sets xnh4c = 0, then uses a -1 charge (instead of -2)
-                  !       for so4 when solving the electro-neutrality equation
                 tmp_so3  = tmp_hso3 * 2.0_r8*hl_so2%terms_(5,i,k)/xph(i,k)
                 tmp_hco3 = Eco2 / xph(i,k)
                 tmp_oh   = WATER_DISSOCIATION_CONSTANT / xph(i,k)
@@ -627,21 +612,14 @@ contains
           !       ... for Ho2(g) -> H2o2(a) formation
           !           schwartz JGR, 1984, 11589
           !------------------------------------------------------------------------
-          ho2s = kh0*xho2(i,k)*patm*(1._r8 + kh1/xph(i,k))  ! ho2s = ho2(a)+o2-
-          dh2o2_dt_mol_L_s = (kh2 + kh3*kh1/xph(i,k)) / ((1._r8 + kh1/xph(i,k))**2)*ho2s*ho2s ! prod(h2o2) in mole/L(w)/s
-
-          if ( cloud_borne ) then
-             dh2o2_dt_vmr_s = dh2o2_dt_mol_L_s*xl  & ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
-                  / (1.e3_r8/AVOGADRO)*1.e+6_r8    & ! correct a bug here ????
-                  / (midpoint_pressure(i,k)/(BOLTZMANN*temperature(i,k)))
-          else
-             dh2o2_dt_vmr_s = dh2o2_dt_mol_L_s*xl  & ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
-                  * (1.e3_r8/AVOGADRO)             & ! mole/fm3(a)/s * 1.e-3       = mole/cm3(a)/s
+          ! TODO: Investigate whether this should be done for cloud_borne aerosols
+          if ( .not. cloud_borne ) then
+             ho2s = kh0*xho2(i,k)*patm*(1._r8 + kh1/xph(i,k))             ! ho2s = ho2(a)+o2-
+             dh2o2_dt_mol_L_s = (kh2 + kh3*kh1/xph(i,k)) / ((1._r8 + kh1/xph(i,k))**2)*ho2s*ho2s ! prod(h2o2) in mole/L(w)/s
+             dh2o2_dt_vmr_s = dh2o2_dt_mol_L_s*xl                       & ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
+                  * (1.e3_r8/AVOGADRO)                                  & ! mole/fm3(a)/s * 1.e-3       = mole/cm3(a)/s
                   / (midpoint_pressure(i,k)/(BOLTZMANN*temperature(i,k))) ! /cm3(a)/s    / air-den     = mix-ratio/s
-          endif
-
-          if ( .not. cloud_borne) then    ! this seems to be specific to aerosols that are not cloud borne
-             xh2o2(i,k) = xh2o2(i,k) + dh2o2_dt_vmr_s*time_step  ! updated h2o2 based on heterogeneous production
+             xh2o2(i,k) = xh2o2(i,k) + dh2o2_dt_vmr_s*time_step           ! updated h2o2 based on heterogeneous production
           endif
 
           !-----------------------------------------------
@@ -649,6 +627,10 @@ contains
           !-----------------------------------------------
           call hl_hno3%gas_phase_mixing_ratio( i, k, xph(i,k), xhno3(i,k)+xno3(i,k), hno3g(i,k) )
           call hl_so2%gas_phase_mixing_ratio(  i, k, xph(i,k), xso2(i,k), so2g )
+          ! Remove NH3/NH4 associated with NH4HSO4 in clouds
+          if (cloud_borne .and. cloud_fraction(i,k)>0._r8) then
+             xnh4(i,k) = xnh4(i,k) - cloud_composition%nh4c(i,k) / cloud_fraction(i,k)
+          endif
           call hl_nh3%gas_phase_mixing_ratio(  i, k, xph(i,k), xnh3(i,k)+xnh4(i,k), nh3g(i,k) )
 
           !------------------------------------------------------------------------

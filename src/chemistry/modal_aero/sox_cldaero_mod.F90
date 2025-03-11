@@ -86,7 +86,7 @@ contains
     do k = 1,pver
        do i = 1,ncol
           if( cldfrc(i,k) >0._r8) then
-             conc_obj%xlwc(i,k) = lwc(i,k) *cfact(i,k) ! cloud water L(water)/L(air)
+             conc_obj%xlwc(i,k) = lwc(i,k) *cfact(i,k) ! cloud water L(water)/L(air) [1 kg_water / L_water]
              conc_obj%xlwc(i,k) = conc_obj%xlwc(i,k) / cldfrc(i,k) ! liquid water in the cloudy fraction of cell
           else
              conc_obj%xlwc(i,k) = 0._r8
