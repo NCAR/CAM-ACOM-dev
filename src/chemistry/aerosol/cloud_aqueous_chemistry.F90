@@ -287,7 +287,10 @@ contains
     type(henrys_law_t) :: hl_hno3, hl_so2, hl_nh3, hl_co2
 
     ! Equilibrium constants used to determine condensed phase ion concentrations [various units]
-    real(r8) :: Eso2, Eso4, Ehno3, Eco2, Enh3
+    real(r8) :: Eso2, Ehno3, Eco2, Enh3
+
+    ! SO4 concentration in cloud water (mol L-1)
+    real(r8) :: so4_concentration
 
     ! Calculated gas-phase mixing ratios (mol mol-1)
     real(r8) :: hno3g(ncol,pver), nh3g(ncol,pver)
@@ -457,9 +460,8 @@ contains
              !-----------------------------------------------------------------
              !         ... so4 effect
              !-----------------------------------------------------------------
-             Eso4 = xso4(i,k)*air_number_density(i,k)   &         ! 
-                    * (1.e3_r8/AVOGADRO) / xl                     ! mol(so4)/L(w)
-
+             so4_concentration = xso4(i,k)*air_number_density(i,k)   & ! 
+                                 * (1.e3_r8/AVOGADRO) / xl             ! mol(so4)/L(w)
 
              !-----------------------------------------------------------------
              ! now use bisection method to solve electro-neutrality equation
@@ -508,7 +510,7 @@ contains
                 tmp_hco3 = Eco2 / xph(i,k)
                 tmp_oh   = WATER_DISSOCIATION_CONSTANT / xph(i,k)
                 tmp_no3  = Ehno3 / xph(i,k)
-                tmp_so4 = cloud_composition%so4_fact*Eso4
+                tmp_so4 = cloud_composition%so4_fact*so4_concentration
                 tmp_pos = xph(i,k) + tmp_nh4
                 tmp_neg = tmp_oh + tmp_hco3 + tmp_no3 + tmp_hso3 + tmp_so3 + tmp_so4
 
