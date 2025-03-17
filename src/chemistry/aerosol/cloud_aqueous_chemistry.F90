@@ -79,7 +79,7 @@ module cloud_aqueous_chemistry
     type(van_t_hoff_t) :: second_dissociation_factor_! A = mol L-1, B = K
     type(van_t_hoff_t) :: protonation_factor_        ! A = mol L-1, B = K
     real(r8) :: reference_temperature_ = 298.0_r8    ! K
-    real(r8), allocatable :: terms_(:,:,:) ! 1: mol2 L-2, 2: unitless, 3: mol L-1, 4: mol L-1
+    real(r8), allocatable :: terms_(:,:,:) ! 1: mol2 L-2, 2: unitless, 3: mol L-1, 4: mol L-1 (term, column, level)
   contains
     procedure :: set_conditions => henrys_law_set_conditions
     procedure :: equilibrium_constant => henrys_law_equilibrium_constant
@@ -284,7 +284,7 @@ contains
     real(r8) :: change_in_aq_so4_mixing_ratio(ncol,pver)
 
     ! Partitioning calculators
-    type(henrys_law_t) :: hl_hno3, hl_so2, hl_nh3, hl_co2
+    type(henrys_law_t) :: hl_hno3, hl_so2, hl_nh3, hl_co2, hl_h2o2
 
     ! Equilibrium constants used to determine condensed phase ion concentrations [various units]
     real(r8) :: Eso2, Ehno3, Eco2, Enh3
@@ -388,6 +388,16 @@ contains
     hl_co2%first_dissociation_factor_%A_ = 4.3e-7_r8
     hl_co2%first_dissociation_factor_%B_ = -913.0_r8
 
+    ! H2O2 paritioning parameters
+    !
+    ! TODO: Find reference for these values
+    hl_h2o2 = henrys_law_t( ncol, pver )
+    hl_h2o2%type_ = HENRYS_LAW_MONOPROTIC_ACID
+    hl_h2o2%partitioning_factor_%A_ = 7.4e4_r8
+    hl_h2o2%partitioning_factor_%B_ = 6621.0_r8
+    hl_h2o2%first_dissociation_factor_%A_ = 2.2e-12_r8
+    hl_h2o2%first_dissociation_factor_%B_ = -3730.0_r8
+
     !==================================================================
     !       ... First set the PH
     !==================================================================
@@ -456,6 +466,7 @@ contains
              call hl_so2%set_conditions(  i, k, temperature(i,k), patm, xl, xso2(i,k)  )
              call hl_nh3%set_conditions(  i, k, temperature(i,k), patm, xl, xnh3(i,k) + xnh4(i,k) )
              call hl_co2%set_conditions(  i, k, temperature(i,k), patm, xl, xco2(i,k) )
+             call hl_h2o2%set_conditions( i, k, temperature(i,k), patm, xl, xh2o2(i,k) )
 
              !-----------------------------------------------------------------
              !         ... so4 effect
@@ -598,13 +609,6 @@ contains
           patm = midpoint_pressure(i,k) / 101300._r8        ! press is in pascal
 
           !-----------------------------------------------------------------
-          !        ... h2o2
-          !-----------------------------------------------------------------
-          xk = 7.4e4_r8   *EXP( 6621._r8*work1(i) )
-          xe = 2.2e-12_r8 *EXP(-3730._r8*work1(i) )
-          heh2o2(i,k)  = xk*(1._r8 + xe/xph(i,k))
-
-          !-----------------------------------------------------------------
           !        ... o3
           !-----------------------------------------------------------------
           xk = 1.15e-2_r8 *EXP( 2560._r8*work1(i) )
@@ -634,12 +638,7 @@ contains
              xnh4(i,k) = xnh4(i,k) - cloud_composition%nh4c(i,k) / cloud_fraction(i,k)
           endif
           call hl_nh3%gas_phase_mixing_ratio(  i, k, xph(i,k), xnh3(i,k)+xnh4(i,k), nh3g(i,k) )
-
-          !------------------------------------------------------------------------
-          !        ... h2o2
-          !------------------------------------------------------------------------
-          px = heh2o2(i,k) * GAS_CONSTANT_L_ATM_MOL_K * temperature(i,k) * xl
-          h2o2g =  xh2o2(i,k)/(1._r8+ px)
+          call hl_h2o2%gas_phase_mixing_ratio( i, k, xph(i,k), xh2o2(i,k), h2o2g )
 
           !------------------------------------------------------------------------
           !         ... o3
@@ -696,6 +695,7 @@ contains
                 dso4_dt = k_siv_h2o2 * 7.4e4_r8*EXP(6621._r8*work1(i)) * h2o2g * patm_x &
                      * 1.23_r8 *EXP(3120._r8*work1(i)) * so2g * patm_x
              else
+                call hl_h2o2%effective_henrys_law_constant( i, k, xph(i,k), heh2o2(i,k) )
                 dso4_dt = k_siv_h2o2 * heh2o2(i,k) * h2o2g * patm_x  &
                      * heso2(i,k)  * so2g  * patm_x    ! [M/s]
              endif
@@ -704,7 +704,6 @@ contains
                   * xl                 & ! [mole/L(a)/s]
                   / (1.e3_r8/AVOGADRO) & ! [/L(a)/s]
                   / air_number_density(i,k)
-
 
              delta_concentration = dso4_dt*time_step
              delta_concentration = max(delta_concentration, SMALL_NUMBER)
