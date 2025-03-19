@@ -62,6 +62,7 @@ module cloud_aqueous_chemistry
   integer, parameter :: HENRYS_LAW_DIPROTIC_ACID = 2
   integer, parameter :: HENRYS_LAW_BASE = 3
   integer, parameter :: HENRYS_LAW_NEUTRAL = 4
+  integer, parameter :: HENRYS_LAW_HO2 = 5
 
   !> @brief Henry's Law parameters for acids and bases
   !! Calculates an equilibrium concentration of the dissociated acid based on the
@@ -78,6 +79,9 @@ module cloud_aqueous_chemistry
     type(van_t_hoff_t) :: first_dissociation_factor_ ! A = mol L-1, B = K
     type(van_t_hoff_t) :: second_dissociation_factor_! A = mol L-1, B = K
     type(van_t_hoff_t) :: protonation_factor_        ! A = mol L-1, B = K
+    type(van_t_hoff_t) :: ho2__hplus_o2minus_        ! A = mol2 L-2, B = K
+    type(van_t_hoff_t) :: ho2_ho2__h2o2_o2_          ! A = mol2 L-2, B = K
+    type(van_t_hoff_t) :: ho2_o2minus__h2o2_o2_      ! A = mol2 L-2, B = K
     real(r8) :: reference_temperature_ = 298.0_r8    ! K
     real(r8), allocatable :: terms_(:,:,:) ! 1: mol2 L-2, 2: unitless, 3: mol L-1, 4: mol L-1 (term, column, level)
   contains
@@ -100,9 +104,10 @@ module cloud_aqueous_chemistry
   ! Constants that should be moved to a common module
   ! FUTURE_ANSWER_CHANGING_MODIFICATION - Use correct conversion factors and base SI units
   real(r8), parameter :: AVOGADRO = 6.023e23 ! 6.02214076e23_r8 ! mol-1
-  real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8
-  real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314.0_r8*PASCAL_TO_ATM ! BOLTZMANN*AVOGADRO*1000.0_r8*PASCAL_TO_ATM
   real(r8), parameter :: BOLTZMANN = 1.38e-23_r8 ! 1.380649e-23_r8 ! J K-1
+  real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8
+  real(r8), parameter :: GAS_CONSTANT = BOLTZMANN*AVOGADRO ! J K-1 mol-1
+  real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314.0_r8*PASCAL_TO_ATM ! BOLTZMANN*AVOGADRO*1000.0_r8*PASCAL_TO_ATM
   real(r8), parameter :: GAS_CONSTANT_DRY_AIR_J_KG_K = 287.0_r8 ! J kg-1 K-1
   real(r8), parameter :: SMALL_NUMBER = 1.e-30_r8 ! unitless
   real(r8), parameter :: WATER_DISSOCIATION_CONSTANT = 1.e-14_r8 ! mol2/L2  [H+][OH-]
@@ -284,7 +289,7 @@ contains
     real(r8) :: change_in_aq_so4_mixing_ratio(ncol,pver)
 
     ! Partitioning calculators
-    type(henrys_law_t) :: hl_hno3, hl_so2, hl_nh3, hl_co2, hl_h2o2
+    type(henrys_law_t) :: hl_hno3, hl_so2, hl_nh3, hl_co2, hl_h2o2, hl_ho2
 
     ! Equilibrium constants used to determine condensed phase ion concentrations [various units]
     real(r8) :: Eso2, Ehno3, Eco2, Enh3
@@ -299,7 +304,7 @@ contains
     integer  :: k, i, iter
     real(r8) :: xk, xe, x2
     real(r8) :: xl, px, patm
-    real(r8) :: so2g, h2o2g, o3g
+    real(r8) :: so2g, h2o2g, o3g, ho2g
     real(r8) :: k_siv_h2o2  ! rate constant for reaction of S(IV) with H2O2
     real(r8) :: k_siv_o3    ! rate constant for reaction of S(IV) with O3
     real(r8) :: dso4_dt     ! rate of change of SO4
@@ -398,6 +403,22 @@ contains
     hl_h2o2%first_dissociation_factor_%A_ = 2.2e-12_r8
     hl_h2o2%first_dissociation_factor_%B_ = -3730.0_r8
 
+    ! HO2 partitioning parameters
+    !
+    !       ... for Ho2(g) -> H2o2(a) formation
+    !           schwartz JGR, 1984, 11589
+    ! TODO: Find reference for these values
+    hl_ho2 = henrys_law_t( ncol, pver )
+    hl_ho2%type_ = HENRYS_LAW_HO2
+    hl_ho2%partitioning_factor_%A_ = 9.0e3_r8
+    hl_ho2%partitioning_factor_%B_ = 0.0_r8
+    hl_ho2%ho2__hplus_o2minus_%A_ = 2.05e-5_r8
+    hl_ho2%ho2__hplus_o2minus_%B_ = 0.0_r8
+    hl_ho2%ho2_ho2__h2o2_o2_%A_ = 8.6e5_r8
+    hl_ho2%ho2_ho2__h2o2_o2_%B_ = 0.0_r8
+    hl_ho2%ho2_o2minus__h2o2_o2_%A_ = 1.0e8_r8 
+    hl_ho2%ho2_o2minus__h2o2_o2_%B_ = 0.0_r8
+
     !==================================================================
     !       ... First set the PH
     !==================================================================
@@ -467,6 +488,7 @@ contains
              call hl_nh3%set_conditions(  i, k, temperature(i,k), patm, xl, xnh3(i,k) + xnh4(i,k) )
              call hl_co2%set_conditions(  i, k, temperature(i,k), patm, xl, xco2(i,k) )
              call hl_h2o2%set_conditions( i, k, temperature(i,k), patm, xl, xh2o2(i,k) )
+             call hl_ho2%set_conditions(  i, k, temperature(i,k), patm, xl, xho2(i,k) )
 
              !-----------------------------------------------------------------
              !         ... so4 effect
@@ -614,20 +636,6 @@ contains
           xk = 1.15e-2_r8 *EXP( 2560._r8*work1(i) )
           heo3(i,k) = xk
 
-          !------------------------------------------------------------------------
-          !       ... for Ho2(g) -> H2o2(a) formation
-          !           schwartz JGR, 1984, 11589
-          !------------------------------------------------------------------------
-          ! TODO: Investigate whether this should be done for cloud_borne aerosols
-          if ( .not. cloud_borne ) then
-             ho2s = kh0*xho2(i,k)*patm*(1._r8 + kh1/xph(i,k))             ! ho2s = ho2(a)+o2-
-             dh2o2_dt_mol_L_s = (kh2 + kh3*kh1/xph(i,k)) / ((1._r8 + kh1/xph(i,k))**2)*ho2s*ho2s ! prod(h2o2) in mole/L(w)/s
-             dh2o2_dt_vmr_s = dh2o2_dt_mol_L_s*xl                       & ! mole/L(w)/s   * L(w)/fm3(a) = mole/fm3(a)/s
-                  * (1.e3_r8/AVOGADRO)                                  & ! mole/fm3(a)/s * 1.e-3       = mole/cm3(a)/s
-                  / (midpoint_pressure(i,k)/(BOLTZMANN*temperature(i,k))) ! /cm3(a)/s    / air-den     = mix-ratio/s
-             xh2o2(i,k) = xh2o2(i,k) + dh2o2_dt_vmr_s*time_step           ! updated h2o2 based on heterogeneous production
-          endif
-
           !-----------------------------------------------
           !       ... Partioning
           !-----------------------------------------------
@@ -639,6 +647,12 @@ contains
           endif
           call hl_nh3%gas_phase_mixing_ratio(  i, k, xph(i,k), xnh3(i,k)+xnh4(i,k), nh3g(i,k) )
           call hl_h2o2%gas_phase_mixing_ratio( i, k, xph(i,k), xh2o2(i,k), h2o2g )
+          ! Account for H2O2(aq) in cloud water from HO2 uptake
+          ! TODO: Investigate whether this should be done for cloud_borne aerosols
+          if ( .not. cloud_borne ) then
+            call hl_ho2%gas_phase_mixing_ratio( i, k, xph(i,k), xho2(i,k), ho2g, time_step )
+            xh2o2(i,k) = xh2o2(i,k) + (xho2(i,k) - ho2g)
+          endif
 
           !------------------------------------------------------------------------
           !         ... o3
@@ -932,7 +946,7 @@ contains
       real(r8),            intent(in)    :: cloud_water        ! L_water L_air-1
       real(r8),            intent(in)    :: total_mixing_ratio ! mol mol-1
 
-      real(r8) :: v1, v2, v3, v4_kw, temp_delta
+      real(r8) :: v1, v2, v3, v4, v4_kw, temp_delta
 
       temp_delta = 1._r8 / temperature - 1._r8 / this%reference_temperature_     ! K-1
 
@@ -949,6 +963,13 @@ contains
          else
             v3 = 0._r8
          end if
+      else if (this%type_ == HENRYS_LAW_HO2) then
+         v2 = this%ho2__hplus_o2minus_%A_ &
+              * exp( this%ho2__hplus_o2minus_%B_ * temp_delta )                  ! mol L-1
+         v3 = this%ho2_ho2__h2o2_o2_%A_ &
+              * exp( this%ho2_ho2__h2o2_o2_%B_ * temp_delta )                    ! mol L-1
+         v4 = this%ho2_o2minus__h2o2_o2_%A_ &
+              * exp( this%ho2_o2minus__h2o2_o2_%B_ * temp_delta )                ! mol L-1
       else
          v2 = 0._r8
          v3 = 0._r8
@@ -960,14 +981,24 @@ contains
       else
          v4_kw = 0._r8
       end if
-      this%terms_(1,i_column,i_layer) = v1 * (v2 + v4_kw) &
-                                        * pressure * total_mixing_ratio          ! mol^2 L-2 (acid) or unitless (base)
-      this%terms_(2,i_column,i_layer) = GAS_CONSTANT_L_ATM_MOL_K &
-                                        * temperature * cloud_water              ! L mol-1
-      this%terms_(3,i_column,i_layer) = v1                                       ! mol L-1 atm-1
-      this%terms_(4,i_column,i_layer) = v2                                       ! mol L-1
-      this%terms_(5,i_column,i_layer) = v3                                       ! mol L-1
-      this%terms_(6,i_column,i_layer) = v4_kw                                    ! mol-1 L
+      if (this%type_ == HENRYS_LAW_HO2) then
+         this%terms_(1,i_column,i_layer) = v1 * pressure                         ! mol_aq L-1 atm_air atm_gas-1
+         this%terms_(2,i_column,i_layer) = v2                                    ! mol L-1
+         this%terms_(3,i_column,i_layer) = v3                                    ! L mol-1 s-1
+         this%terms_(4,i_column,i_layer) = v4                                    ! L mol-1 s-1
+         this%terms_(5,i_column,i_layer) = cloud_water * &
+                                           (pressure / PASCAL_TO_ATM) / &
+                                           (GAS_CONSTANT * temperature)          ! m_h2o^3 molecule-1
+      else
+        this%terms_(1,i_column,i_layer) = v1 * (v2 + v4_kw) &
+                                          * pressure * total_mixing_ratio        ! mol^2 L-2 (acid) or unitless (base)
+        this%terms_(2,i_column,i_layer) = GAS_CONSTANT_L_ATM_MOL_K &
+                                          * temperature * cloud_water            ! L mol-1
+        this%terms_(3,i_column,i_layer) = v1                                     ! mol L-1 atm-1
+        this%terms_(4,i_column,i_layer) = v2                                     ! mol L-1
+        this%terms_(5,i_column,i_layer) = v3                                     ! mol L-1
+        this%terms_(6,i_column,i_layer) = v4_kw                                  ! mol-1 L
+      end if
 
    end subroutine henrys_law_set_conditions
 
@@ -1000,7 +1031,7 @@ contains
    ! See description for henrys_law_monoprotic_acid_set_conditions for details.
    elemental subroutine henrys_law_gas_phase_mixing_ratio( &
          this, i_column, i_layer, h_plus_concentration, total_mixing_ratio, &
-         gas_phase_mixing_ratio )
+         gas_phase_mixing_ratio, time_step )
       
       class(henrys_law_t), intent(in)  :: this
       integer,             intent(in)  :: i_column
@@ -1008,12 +1039,29 @@ contains
       real(r8),            intent(in)  :: total_mixing_ratio     ! mol mol-1
       real(r8),            intent(in)  :: h_plus_concentration   ! mol L-1
       real(r8),            intent(out) :: gas_phase_mixing_ratio ! mol mol-1
+      real(r8), optional,  intent(in)  :: time_step              ! s
 
-      real(r8) :: H_eff
-      call this%effective_henrys_law_constant( i_column, i_layer, &
-                                               h_plus_concentration, H_eff )
-      gas_phase_mixing_ratio = total_mixing_ratio &
-                             / (1._r8 + H_eff * this%terms_(2,i_column,i_layer))
+      real(r8) :: H_eff  ! Effective Henry's Law constant (mol L-1 atm-1)
+      real(r8) :: ho2_ss ! Steady state HO2 concentration (mol L-1)
+      real(r8) :: kh1_hplus ! KH1 / [H+] (unitless)
+      if (this%type_ == HENRYS_LAW_HO2) then
+        if (present(time_step)) then
+          kh1_hplus = this%terms_(2,i_column,i_layer) / h_plus_concentration
+          ho2_ss = this%terms_(1, i_column, i_layer) * total_mixing_ratio &
+                   * (1._r8 + kh1_hplus)
+          gas_phase_mixing_ratio = (this%terms_(3,i_column,i_layer) + &
+                               this%terms_(4,i_column,i_layer) * kh1_hplus) &
+                               / ((1._r8 + kh1_hplus)**2) * ho2_ss**2 &
+                               * this%terms_(5,i_column,i_layer) * time_step
+        else
+          gas_phase_mixing_ratio = 0._r8 ! TODO: should be a failure condition
+        end if
+      else
+        call this%effective_henrys_law_constant( i_column, i_layer, &
+                                                 h_plus_concentration, H_eff )
+        gas_phase_mixing_ratio = total_mixing_ratio &
+                               / (1._r8 + H_eff * this%terms_(2,i_column,i_layer))
+      end if
 
    end subroutine henrys_law_gas_phase_mixing_ratio
 
