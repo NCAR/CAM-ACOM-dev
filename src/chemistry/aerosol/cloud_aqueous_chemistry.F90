@@ -63,6 +63,7 @@ module cloud_aqueous_chemistry
   integer, parameter :: HENRYS_LAW_BASE = 3
   integer, parameter :: HENRYS_LAW_NEUTRAL = 4
   integer, parameter :: HENRYS_LAW_HO2 = 5
+  integer, parameter :: HENRYS_LAW_CO2 = 6
 
   !> @brief Henry's Law parameters for acids and bases
   !! Calculates an equilibrium concentration of the dissociated acid based on the
@@ -289,7 +290,7 @@ contains
     real(r8) :: change_in_aq_so4_mixing_ratio(ncol,pver)
 
     ! Partitioning calculators
-    type(henrys_law_t) :: hl_hno3, hl_so2, hl_nh3, hl_co2, hl_h2o2, hl_ho2
+    type(henrys_law_t) :: hl_hno3, hl_so2, hl_nh3, hl_co2, hl_h2o2, hl_ho2, hl_o3
 
     ! Equilibrium constants used to determine condensed phase ion concentrations [various units]
     real(r8) :: Eso2, Ehno3, Eco2, Enh3
@@ -388,7 +389,7 @@ contains
     !
     ! TODO: Find reference for these values
     hl_co2 = henrys_law_t( ncol, pver )
-    hl_co2%type_ = HENRYS_LAW_NEUTRAL
+    hl_co2%type_ = HENRYS_LAW_CO2
     hl_co2%partitioning_factor_%A_ = 3.1e-2_r8
     hl_co2%partitioning_factor_%B_ = 2423.0_r8
     hl_co2%first_dissociation_factor_%A_ = 4.3e-7_r8
@@ -419,6 +420,14 @@ contains
     hl_ho2%ho2_ho2__h2o2_o2_%B_ = 0.0_r8
     hl_ho2%ho2_o2minus__h2o2_o2_%A_ = 1.0e8_r8 
     hl_ho2%ho2_o2minus__h2o2_o2_%B_ = 0.0_r8
+
+    ! O3 paritioning parameters
+    !
+    ! TODO: Find reference for these values
+    hl_o3 = henrys_law_t( ncol, pver )
+    hl_o3%type_ = HENRYS_LAW_NEUTRAL
+    hl_o3%partitioning_factor_%A_ = 1.15e-2_r8
+    hl_o3%partitioning_factor_%B_ = 2560.0_r8
 
     !==================================================================
     !       ... First set the PH
@@ -490,6 +499,7 @@ contains
              call hl_co2%set_conditions(  i, k, temperature(i,k), patm, xl, xco2(i,k) )
              call hl_h2o2%set_conditions( i, k, temperature(i,k), patm, xl, xh2o2(i,k) )
              call hl_ho2%set_conditions(  i, k, temperature(i,k), patm, xl, xho2(i,k) )
+             call hl_o3%set_conditions(   i, k, temperature(i,k), patm, xl, xo3(i,k) )
 
              !-----------------------------------------------------------------
              !         ... so4 effect
@@ -631,12 +641,6 @@ contains
           ! FUTURE_ANSWER_CHANGING_MODIFICATION
           patm = midpoint_pressure(i,k) / 101300._r8        ! press is in pascal
 
-          !-----------------------------------------------------------------
-          !        ... o3
-          !-----------------------------------------------------------------
-          xk = 1.15e-2_r8 *EXP( 2560._r8*work1(i) )
-          heo3(i,k) = xk
-
           !-----------------------------------------------
           !       ... Partioning
           !-----------------------------------------------
@@ -654,12 +658,8 @@ contains
             call hl_ho2%gas_phase_mixing_ratio( i, k, xph(i,k), xho2(i,k), dh2o2_dt )
             xh2o2(i,k) = xh2o2(i,k) + dh2o2_dt * time_step
           endif
-
-          !------------------------------------------------------------------------
-          !         ... o3
-          !------------------------------------------------------------------------
-          px = heo3(i,k) * GAS_CONSTANT_L_ATM_MOL_K * temperature(i,k) * xl
-          o3g =  xo3(i,k)/(1._r8+ px)
+          call hl_o3%gas_phase_mixing_ratio( i, k, xph(i,k), xo3(i,k), o3g )
+          call hl_o3%effective_henrys_law_constant( i, k, xph(i,k), heo3(i,k) )
 
           !-----------------------------------------------
           !       ... Aqueous phase reaction rates
@@ -955,7 +955,8 @@ contains
            * exp( this%partitioning_factor_%B_ * temp_delta )                    ! mol L-1 atm-1
       if (this%type_ == HENRYS_LAW_MONOPROTIC_ACID .or. &
           this%type_ == HENRYS_LAW_DIPROTIC_ACID .or. &
-          this%type_ == HENRYS_LAW_NEUTRAL) then
+          this%type_ == HENRYS_LAW_NEUTRAL .or. &
+          this%type_ == HENRYS_LAW_CO2) then
          v2 = this%first_dissociation_factor_%A_ &
               * exp( this%first_dissociation_factor_%B_ * temp_delta )           ! mol L-1
          if (this%type_ == HENRYS_LAW_DIPROTIC_ACID) then
@@ -1097,7 +1098,8 @@ contains
       real(r8),            intent(in)  :: h_plus_concentration   ! mol L-1
       real(r8),            intent(out) :: effective_constant     ! mol L-1 atm-1
 
-      if (this%type_ == HENRYS_LAW_MONOPROTIC_ACID .or. &
+      if (this%type_ == HENRYS_LAW_NEUTRAL .or. &
+          this%type_ == HENRYS_LAW_MONOPROTIC_ACID .or. &
           this%type_ == HENRYS_LAW_DIPROTIC_ACID) then
          effective_constant = this%terms_(3,i_column,i_layer) &
                          * (1._r8 + this%terms_(4,i_column,i_layer) &
