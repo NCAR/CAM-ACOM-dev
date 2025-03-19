@@ -90,6 +90,7 @@ module cloud_aqueous_chemistry
     procedure :: equilibrium_constant => henrys_law_equilibrium_constant
     procedure :: gas_phase_mixing_ratio => henrys_law_gas_phase_mixing_ratio
     procedure :: effective_henrys_law_constant => henrys_law_effective_henrys_law_constant
+    procedure :: reaction_rate => henrys_law_reaction_rate
   end type henrys_law_t
 
   interface henrys_law_t
@@ -655,11 +656,10 @@ contains
           ! Account for H2O2(aq) in cloud water from HO2 uptake
           ! TODO: Investigate whether this should be done for cloud_borne aerosols
           if ( .not. cloud_borne ) then
-            call hl_ho2%gas_phase_mixing_ratio( i, k, xph(i,k), xho2(i,k), dh2o2_dt )
+            call hl_ho2%reaction_rate( i, k, xph(i,k), xho2(i,k), dh2o2_dt )
             xh2o2(i,k) = xh2o2(i,k) + dh2o2_dt * time_step
           endif
           call hl_o3%gas_phase_mixing_ratio( i, k, xph(i,k), xo3(i,k), o3g )
-          call hl_o3%effective_henrys_law_constant( i, k, xph(i,k), heo3(i,k) )
 
           !-----------------------------------------------
           !       ... Aqueous phase reaction rates
@@ -699,6 +699,7 @@ contains
           IF (XL .ge. MINIMUM_CLOUD_LIQUID_WATER) THEN    !! WHEN CLOUD IS PRESENTED
 
              call hl_so2%effective_henrys_law_constant( i, k, xph(i,k), heso2(i,k) )
+             call hl_o3%effective_henrys_law_constant(  i, k, xph(i,k), heo3(i,k)  )
 
              if (cloud_borne) then
                 patm_x = patm
