@@ -304,7 +304,8 @@ contains
     integer  :: k, i, iter
     real(r8) :: xk, xe, x2
     real(r8) :: xl, px, patm
-    real(r8) :: so2g, h2o2g, o3g, ho2g
+    real(r8) :: so2g, h2o2g, o3g
+    real(r8) :: dh2o2_dt    ! reaction rate for formation of H2O2(aq) (mol mol-1 s-1)
     real(r8) :: k_siv_h2o2  ! rate constant for reaction of S(IV) with H2O2
     real(r8) :: k_siv_o3    ! rate constant for reaction of S(IV) with O3
     real(r8) :: dso4_dt     ! rate of change of SO4
@@ -650,8 +651,8 @@ contains
           ! Account for H2O2(aq) in cloud water from HO2 uptake
           ! TODO: Investigate whether this should be done for cloud_borne aerosols
           if ( .not. cloud_borne ) then
-            call hl_ho2%gas_phase_mixing_ratio( i, k, xph(i,k), xho2(i,k), ho2g, time_step )
-            xh2o2(i,k) = xh2o2(i,k) + (xho2(i,k) - ho2g)
+            call hl_ho2%gas_phase_mixing_ratio( i, k, xph(i,k), xho2(i,k), dh2o2_dt )
+            xh2o2(i,k) = xh2o2(i,k) + dh2o2_dt * time_step
           endif
 
           !------------------------------------------------------------------------
@@ -1031,7 +1032,7 @@ contains
    ! See description for henrys_law_monoprotic_acid_set_conditions for details.
    elemental subroutine henrys_law_gas_phase_mixing_ratio( &
          this, i_column, i_layer, h_plus_concentration, total_mixing_ratio, &
-         gas_phase_mixing_ratio, time_step )
+         gas_phase_mixing_ratio )
       
       class(henrys_law_t), intent(in)  :: this
       integer,             intent(in)  :: i_column
@@ -1039,23 +1040,11 @@ contains
       real(r8),            intent(in)  :: total_mixing_ratio     ! mol mol-1
       real(r8),            intent(in)  :: h_plus_concentration   ! mol L-1
       real(r8),            intent(out) :: gas_phase_mixing_ratio ! mol mol-1
-      real(r8), optional,  intent(in)  :: time_step              ! s
 
       real(r8) :: H_eff  ! Effective Henry's Law constant (mol L-1 atm-1)
-      real(r8) :: ho2_ss ! Steady state HO2 concentration (mol L-1)
-      real(r8) :: kh1_hplus ! KH1 / [H+] (unitless)
+
       if (this%type_ == HENRYS_LAW_HO2) then
-        if (present(time_step)) then
-          kh1_hplus = this%terms_(2,i_column,i_layer) / h_plus_concentration
-          ho2_ss = this%terms_(1, i_column, i_layer) * total_mixing_ratio &
-                   * (1._r8 + kh1_hplus)
-          gas_phase_mixing_ratio = (this%terms_(3,i_column,i_layer) + &
-                               this%terms_(4,i_column,i_layer) * kh1_hplus) &
-                               / ((1._r8 + kh1_hplus)**2) * ho2_ss**2 &
-                               * this%terms_(5,i_column,i_layer) * time_step
-        else
           gas_phase_mixing_ratio = 0._r8 ! TODO: should be a failure condition
-        end if
       else
         call this%effective_henrys_law_constant( i_column, i_layer, &
                                                  h_plus_concentration, H_eff )
@@ -1064,6 +1053,36 @@ contains
       end if
 
    end subroutine henrys_law_gas_phase_mixing_ratio
+   
+   !-------------------------------------------------------------------------------
+   ! Returns the rate of change in condensed-phase mixing ratio (mol mol-1 s-1)
+   ! for the current conditions due to partitioning and condensed-phase reactions.
+   elemental subroutine henrys_law_reaction_rate( this, i_column, i_layer, &
+       total_mixing_ratio, h_plus_concentration, reaction_rate )
+
+      class(henrys_law_t), intent(in)  :: this
+      integer,             intent(in)  :: i_column
+      integer,             intent(in)  :: i_layer
+      real(r8),            intent(in)  :: total_mixing_ratio     ! mol mol-1
+      real(r8),            intent(in)  :: h_plus_concentration   ! mol L-1
+      real(r8),            intent(out) :: reaction_rate          ! mol mol-1 s-1
+
+      real(r8) :: kh1_hplus ! KH1 / [H+] (unitless)
+      real(r8) :: ho2_ss ! Steady state HO2 concentration (mol L-1)
+
+      if (this%type_ == HENRYS_LAW_HO2) then
+         kh1_hplus = this%terms_(2,i_column,i_layer) / h_plus_concentration
+         ho2_ss = this%terms_(1, i_column, i_layer) * total_mixing_ratio &
+                   * (1._r8 + kh1_hplus)
+         reaction_rate = (this%terms_(3,i_column,i_layer) + &
+                          this%terms_(4,i_column,i_layer) * kh1_hplus) &
+                         / ((1._r8 + kh1_hplus)**2) * ho2_ss**2 &
+                         * this%terms_(5,i_column,i_layer)
+      else
+         reaction_rate = 0._r8 ! This should be a failure condition
+      end if
+
+   end subroutine henrys_law_reaction_rate
 
    !-------------------------------------------------------------------------------
    ! Returns the Effective Henry's Law constant for the current conditions
