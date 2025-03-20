@@ -89,6 +89,7 @@ module cloud_aqueous_chemistry
     procedure :: set_conditions => henrys_law_set_conditions
     procedure :: equilibrium_constant => henrys_law_equilibrium_constant
     procedure :: gas_phase_mixing_ratio => henrys_law_gas_phase_mixing_ratio
+    procedure :: partitioned_species_concentration => henrys_law_partitioned_species_concentration
     procedure :: effective_henrys_law_constant => henrys_law_effective_henrys_law_constant
     procedure :: reaction_rate => henrys_law_reaction_rate
   end type henrys_law_t
@@ -113,6 +114,7 @@ module cloud_aqueous_chemistry
   real(r8), parameter :: GAS_CONSTANT_DRY_AIR_J_KG_K = 287.0_r8 ! J kg-1 K-1
   real(r8), parameter :: SMALL_NUMBER = 1.e-30_r8 ! unitless
   real(r8), parameter :: WATER_DISSOCIATION_CONSTANT = 1.e-14_r8 ! mol2/L2  [H+][OH-]
+  real(r8), parameter :: L_TO_M3 = 1.e-3_r8 ! m3 L-1
 
 contains
 
@@ -317,9 +319,9 @@ contains
     !            for Ho2(g) -> H2o2(a) formation
     !            schwartz JGR, 1984, 11589
     !-----------------------------------------------------------------------
-    real(r8) :: ho2s   ! ho2s = ho2(a)+o2-
+    real(r8) :: ho2s             ! ho2s = ho2(a)+o2-
     real(r8) :: dh2o2_dt_mol_L_s ! prod(h2o2) by ho2 in mole/L(w)/s
-    real(r8) :: dh2o2_dt_vmr_s ! prod(h2o2) by ho2 in mix/s
+    real(r8) :: dh2o2_dt_vmr_s   ! prod(h2o2) by ho2 in mix/s
 
     ! volume mixing ratios for cloud chemistry species
     real(r8), dimension(ncol,pver) ::  xhno3, xh2o2, xso2, xso4, xno3, &
@@ -328,12 +330,11 @@ contains
     real(r8), dimension(ncol,pver) :: air_mass_density_kg_l ! kg L-1
     
     ! Effective Henry's Law constants
-    real(r8), dimension(ncol,pver) :: heh2o2, heso2, heo3
+    real(r8), dimension(ncol,pver) :: Heff_h2o2, Heff_so2, Heff_o3
 
-    ! TODO: Figure out what this actually represents (it differs based on the value of cloud_borne)
-    real(r8) :: patm_x
+    ! Aqueous-phase concentrations [mol(X) L(air)-1]
+    real(r8) :: h2o2_aq, so2_aq, o3_aq
 
-    real(r8), dimension(ncol)  :: work1
     logical :: converged
 
     ! Information about cloud composition
@@ -475,17 +476,6 @@ contains
           xl = cloud_composition%xlwc(i,k)
 
           if( xl >= MINIMUM_CLOUD_LIQUID_WATER ) then
-             work1(i) = 1._r8 / temperature(i,k) - 1._r8 / 298._r8
-
-             !-----------------------------------------------------------------
-             ! 21-mar-2011 changes by rce
-             ! ph calculation now uses bisection method to solve the electro-neutrality equation
-             !-----------------------------------------------------------------
-
-             !-----------------------------------------------------------------
-             !  calculations done before iterating
-             !-----------------------------------------------------------------
-
              !-----------------------------------------------------------------
              ! This should be divided by 101325, not 101300, but fixing this breaks the tests
              ! FUTURE_ANSWER_CHANGING_MODIFICATION
@@ -509,6 +499,7 @@ contains
                                  * (1.e3_r8/AVOGADRO) / xl             ! mol(so4)/L(w)
 
              !-----------------------------------------------------------------
+             ! 21-mar-2011 chamges by rce
              ! now use bisection method to solve electro-neutrality equation
              !
              ! during the iteration loop,
@@ -560,7 +551,6 @@ contains
                 tmp_neg = tmp_oh + tmp_hco3 + tmp_no3 + tmp_hso3 + tmp_so3 + tmp_so4
 
                 ynetpos = tmp_pos - tmp_neg
-
 
                 ! yposnet = net positive ions/charge
                 ! if the correct ph is bracketed by yph_lo and yph_hi (with yph_lo < yph_hi),
@@ -635,7 +625,6 @@ contains
     !==============================================================
     ver_loop1: do k = 1,pver
        col_loop1: do i = 1,ncol
-          work1(i) = 1._r8 / temperature(i,k) - 1._r8 / 298._r8
           xl = cloud_composition%xlwc(i,k)
 
           ! This should be dividing by 101325, not 101300, but changing it breaks the tests
@@ -652,13 +641,13 @@ contains
              xnh4(i,k) = xnh4(i,k) - cloud_composition%nh4c(i,k) / cloud_fraction(i,k)
           endif
           call hl_nh3%gas_phase_mixing_ratio(  i, k, xph(i,k), xnh3(i,k)+xnh4(i,k), nh3g(i,k) )
-          call hl_h2o2%gas_phase_mixing_ratio( i, k, xph(i,k), xh2o2(i,k), h2o2g )
           ! Account for H2O2(aq) in cloud water from HO2 uptake
           ! TODO: Investigate whether this should be done for cloud_borne aerosols
           if ( .not. cloud_borne ) then
-            call hl_ho2%reaction_rate( i, k, xph(i,k), xho2(i,k), dh2o2_dt )
-            xh2o2(i,k) = xh2o2(i,k) + dh2o2_dt * time_step
+             call hl_ho2%reaction_rate( i, k, xph(i,k), xho2(i,k), dh2o2_dt )
+             xh2o2(i,k) = xh2o2(i,k) + dh2o2_dt * time_step
           endif
+          call hl_h2o2%gas_phase_mixing_ratio( i, k, xph(i,k), xh2o2(i,k), h2o2g )
           call hl_o3%gas_phase_mixing_ratio( i, k, xph(i,k), xo3(i,k), o3g )
 
           !-----------------------------------------------
@@ -669,12 +658,14 @@ contains
 
           !------------------------------------------------------------------------
           !       ... S(IV) (HSO3) + H2O2
+          ! (https://acp.copernicus.org/articles/24/1467/2024/acp-24-1467-2024.pdf)
           !------------------------------------------------------------------------
-          k_siv_h2o2 = 8.e4_r8 * EXP( -3650._r8*work1(i) )  &
+          k_siv_h2o2 = 8.e4_r8 * EXP( -3650._r8*(1._r8 / temperature(i,k) - 1._r8 / 298._r8) )  &
                / (.1_r8 + xph(i,k))
 
           !------------------------------------------------------------------------
           !        ... S(IV)+ O3
+          ! (https://acp.copernicus.org/articles/24/1467/2024/acp-24-1467-2024.pdf)
           !------------------------------------------------------------------------
           k_siv_o3   = 4.39e11_r8 * EXP(-4131._r8/temperature(i,k))  &
                + 2.56e3_r8  * EXP(-996._r8 /temperature(i,k)) /xph(i,k)
@@ -698,22 +689,38 @@ contains
 
           IF (XL .ge. MINIMUM_CLOUD_LIQUID_WATER) THEN    !! WHEN CLOUD IS PRESENTED
 
-             call hl_so2%effective_henrys_law_constant( i, k, xph(i,k), heso2(i,k) )
-             call hl_o3%effective_henrys_law_constant(  i, k, xph(i,k), heo3(i,k)  )
+             call hl_so2%effective_henrys_law_constant( i, k, xph(i,k), Heff_so2(i,k) )
+             call hl_o3%effective_henrys_law_constant(  i, k, xph(i,k), Heff_o3(i,k)  )
+             call hl_h2o2%partitioned_species_concentration( i, k, xph(i,k), xh2o2(i,k), patm, h2o2_aq )
+             call hl_so2%partitioned_species_concentration(  i, k, xph(i,k), xso2(i,k),  patm, so2_aq  )
+             call hl_o3%partitioned_species_concentration(   i, k, xph(i,k), xo3(i,k),   patm, o3_aq   )
 
+             ! FUTURE_ANSWER_CHANGING_MODIFICATION
+             ! It is unclear why different logic is used here for cloud_borne/not cloud_borne
+             ! Specifically, there is no explanation for why pressure should be 1.0 atm in the
+             ! non-cloud-borne case, but the actual pressure should be used in the cloud-borne case.
+             ! Also, in the rate calculations, the cloud-borne logic seems more consistent
+             ! with the description in the reference, where the [SO2](aq) and [H2O2](aq)
+             ! are calculated using the actual Henry's Law constants (not effective HLC) and
+             ! the gas-phase mixing ratios, because the gas-phase concentrations were already
+             ! calculated using H_eff:
+             ! xH2O2(gas) = xH2O2(total) / (1 + H_eff*MIXING_RATIO_TO_ATM)
+             ! [H2O2](aq) = xH2O2(gas) * H
+             !
+             ! In the S(IV) + O3 reaction, it also appears to be inconsistently using the
+             ! total of [SO2](aq), [HSO3-](aq), and [SO3--](aq) in the reaction rate calculation
              if (cloud_borne) then
-                patm_x = patm
+                ! NOTE: uses,
+                !    [H2O2](aq) = [H2O2](aq)
+                !    [SO2](aq)  = [SO2](aq)
+                dso4_dt = k_siv_h2o2 * h2o2_aq * so2_aq
              else
-                patm_x = 1._r8
-             endif
-
-             if (cloud_borne) then
-                dso4_dt = k_siv_h2o2 * 7.4e4_r8*EXP(6621._r8*work1(i)) * h2o2g * patm_x &
-                     * 1.23_r8 *EXP(3120._r8*work1(i)) * so2g * patm_x
-             else
-                call hl_h2o2%effective_henrys_law_constant( i, k, xph(i,k), heh2o2(i,k) )
-                dso4_dt = k_siv_h2o2 * heh2o2(i,k) * h2o2g * patm_x  &
-                     * heso2(i,k)  * so2g  * patm_x    ! [M/s]
+                ! NOTE: uses,
+                !    [H2O2](aq) = [H2O2](aq) + [HO2-](aq)
+                !    [SO2](aq)  = [SO2](aq) + [HSO3-](aq) + [SO3--](aq)
+                ! For some reason, assumes a pressure of 1 atm
+                call hl_h2o2%effective_henrys_law_constant( i, k, xph(i,k), Heff_h2o2(i,k) )
+                dso4_dt = k_siv_h2o2 * Heff_h2o2(i,k) * h2o2g * Heff_so2(i,k) * so2g    ! [M/s]
              endif
 
              dso4_dt = dso4_dt         & ! [M/s] = [mole/L(w)/s]
@@ -761,7 +768,17 @@ contains
              !       S(IV) + O3 = S(VI)
              !...........................
 
-             dso4_dt = k_siv_o3 * heo3(i,k)*o3g*patm_x * heso2(i,k)*so2g*patm_x  ! [M/s]
+             ! NOTE: uses,
+             !   [SO2](aq) = [SO2](aq) + [HSO3-](aq) + [SO3--](aq)
+             !   [O3](aq)  = [O3](aq)
+             ! FUTURE_ANSWER_CHANGING_MODIFICATION
+             !    see if we should use [SO2](aq) here instead
+             !    also, unclear why a pressure of 1 atm is used for non-cloud-borne case
+             if (cloud_borne) then
+               dso4_dt = k_siv_o3 * o3_aq * Heff_so2(i,k)*so2g*patm  ! [M/s]
+             else
+               dso4_dt = k_siv_o3 * o3_aq * Heff_so2(i,k)*so2g       ! [M/s]
+             endif
 
              dso4_dt = dso4_dt         &    ! [M/s] =  [mole/L(w)/s]
                   * xl                 &    ! [mole/L(a)/s]
@@ -996,7 +1013,7 @@ contains
         this%terms_(1,i_column,i_layer) = v1 * (v2 + v4_kw) &
                                           * pressure * total_mixing_ratio        ! mol^2 L-2 (acid) or unitless (base)
         this%terms_(2,i_column,i_layer) = GAS_CONSTANT_L_ATM_MOL_K &
-                                          * temperature * cloud_water            ! L mol-1
+                                          * temperature * cloud_water            ! L mol-1 atm
         this%terms_(3,i_column,i_layer) = v1                                     ! mol L-1 atm-1
         this%terms_(4,i_column,i_layer) = v2                                     ! mol L-1
         this%terms_(5,i_column,i_layer) = v3                                     ! mol L-1
@@ -1055,6 +1072,36 @@ contains
       end if
 
    end subroutine henrys_law_gas_phase_mixing_ratio
+
+   !-------------------------------------------------------------------------------
+   ! Returns the concentration of the neutral, unreacted aqueous-phase species
+   ! concentration [mol(X) L(H2O)-1] after partitioning and dissociation/reactions.
+   elemental subroutine henrys_law_partitioned_species_concentration( this, &
+         i_column, i_layer, h_plus_concentration, total_mixing_ratio, &
+         pressure, species_concentration )
+
+      class(henrys_law_t), intent(in)  :: this
+      integer,             intent(in)  :: i_column
+      integer,             intent(in)  :: i_layer
+      real(r8),            intent(in)  :: total_mixing_ratio     ! mol mol-1
+      real(r8),            intent(in)  :: h_plus_concentration   ! mol L-1
+      real(r8),            intent(out) :: pressure               ! atm
+      real(r8),            intent(out) :: species_concentration  ! mol L-1
+
+      real(r8) :: H_eff  ! Effective Henry's Law constant (mol L-1 atm-1)
+
+      if (this%type_ == HENRYS_LAW_HO2) then
+         species_concentration = 0._r8 ! TODO: should be a failure condition
+      else
+         call this%effective_henrys_law_constant( i_column, i_layer, &
+                                                  h_plus_concentration, H_eff )
+         species_concentration = total_mixing_ratio &                                ! mol(X) mol(air)-1 = atm(x) atm(air)-1
+                               / (1._r8 + H_eff * this%terms_(2,i_column,i_layer)) & ! unitless
+                               * this%terms_(3,i_column,i_layer) &                   ! mol(X) L(H2O)-1 atm(X)-1
+                               * pressure                                            ! atm(air)
+      end if
+
+   end subroutine henrys_law_partitioned_species_concentration
    
    !-------------------------------------------------------------------------------
    ! Returns the rate of change in condensed-phase mixing ratio (mol mol-1 s-1)

@@ -17,11 +17,11 @@ module cloud_utilities
   public :: cldaero_deallocate
 
   type cldaero_conc_t
-     real(r8), pointer :: so4c(:,:)
-     real(r8), pointer :: nh4c(:,:)
-     real(r8), pointer :: no3c(:,:)
-     real(r8), pointer :: xlwc(:,:)
-     real(r8) :: so4_fact
+     real(r8), pointer :: so4c(:,:) ! SO4 mixing ratio [mol(SO4) mol(air)-1]
+     real(r8), pointer :: nh4c(:,:) ! NH4 mixing ratio [mol(NH4) mol(air)-1]
+     real(r8), pointer :: no3c(:,:) ! NO3 mixing ratio [mol(NO3) mol(air)-1]
+     real(r8), pointer :: xlwc(:,:) ! cloud liquid water in cloudy fraction [L(H2O) L(air)-1]
+     real(r8) :: so4_fact ! Charge on SO4 in solution
   end type cldaero_conc_t
 
 contains
