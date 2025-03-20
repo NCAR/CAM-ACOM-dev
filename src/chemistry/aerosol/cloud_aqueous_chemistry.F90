@@ -114,7 +114,7 @@ module cloud_aqueous_chemistry
   real(r8), parameter :: GAS_CONSTANT_DRY_AIR_J_KG_K = 287.0_r8 ! J kg-1 K-1
   real(r8), parameter :: SMALL_NUMBER = 1.e-30_r8 ! unitless
   real(r8), parameter :: WATER_DISSOCIATION_CONSTANT = 1.e-14_r8 ! mol2/L2  [H+][OH-]
-  real(r8), parameter :: L_TO_M3 = 1.e-3_r8 ! m3 L-1
+  real(r8), parameter :: L_TO_M3 = 1.e3_r8 ! m3 L-1
 
 contains
 
@@ -298,16 +298,17 @@ contains
     ! Equilibrium constants used to determine condensed phase ion concentrations [various units]
     real(r8) :: Eso2, Ehno3, Eco2, Enh3
 
-    ! SO4 concentration in cloud water (mol L-1)
-    real(r8) :: so4_concentration
-
     ! Calculated gas-phase mixing ratios (mol mol-1)
     real(r8) :: hno3g(ncol,pver), nh3g(ncol,pver)
+
+    ! Calculated conversion from mol(X) L(H2O)-1 to mol(X) mol(air)-1 based on
+    ! cloud liquid water content
+    real(r8), dimension(ncol,pver) :: molar_to_mixing_ratio ! L mol-1
 
     ! TODO: Skipping renaming of these in anticipation of partitioning/pH estimation structs
     integer  :: k, i, iter
     real(r8) :: xk, xe, x2
-    real(r8) :: xl, px, patm
+    real(r8) :: px, patm
     real(r8) :: so2g, h2o2g, o3g
     real(r8) :: dh2o2_dt    ! reaction rate for formation of H2O2(aq) (mol mol-1 s-1)
     real(r8) :: k_siv_h2o2  ! rate constant for reaction of S(IV) with H2O2
@@ -333,7 +334,7 @@ contains
     real(r8), dimension(ncol,pver) :: Heff_h2o2, Heff_so2, Heff_o3
 
     ! Aqueous-phase concentrations [mol(X) L(air)-1]
-    real(r8) :: h2o2_aq, so2_aq, o3_aq
+    real(r8) :: h2o2_aq, so2_aq, o3_aq, so4_aq
 
     logical :: converged
 
@@ -473,9 +474,12 @@ contains
              xnh4(i,k) = cloud_composition%nh4c(i,k) / cloud_fraction(i,k)
              xno3(i,k) = cloud_composition%no3c(i,k) / cloud_fraction(i,k)
           endif
-          xl = cloud_composition%xlwc(i,k)
 
-          if( xl >= MINIMUM_CLOUD_LIQUID_WATER ) then
+          molar_to_mixing_ratio(i,k) = cloud_water(i,k) &
+                                       * L_TO_M3 * GAS_CONSTANT &
+                                       * temperature(i,k) / midpoint_pressure(i,k)
+
+          if( cloud_composition%xlwc(i,k) >= MINIMUM_CLOUD_LIQUID_WATER ) then
              !-----------------------------------------------------------------
              ! This should be divided by 101325, not 101300, but fixing this breaks the tests
              ! FUTURE_ANSWER_CHANGING_MODIFICATION
@@ -484,19 +488,19 @@ contains
              !-----------------------------------------------------------------
              ! Update Henry's Law calculators with current conditions
              !-----------------------------------------------------------------
-             call hl_hno3%set_conditions( i, k, temperature(i,k), patm, xl, xhno3(i,k) )
-             call hl_so2%set_conditions(  i, k, temperature(i,k), patm, xl, xso2(i,k)  )
-             call hl_nh3%set_conditions(  i, k, temperature(i,k), patm, xl, xnh3(i,k) + xnh4(i,k) )
-             call hl_co2%set_conditions(  i, k, temperature(i,k), patm, xl, xco2(i,k) )
-             call hl_h2o2%set_conditions( i, k, temperature(i,k), patm, xl, xh2o2(i,k) )
-             call hl_ho2%set_conditions(  i, k, temperature(i,k), patm, xl, xho2(i,k) )
-             call hl_o3%set_conditions(   i, k, temperature(i,k), patm, xl, xo3(i,k) )
-
+             associate( lwc => cloud_composition%xlwc(i,k) )
+               call hl_hno3%set_conditions( i, k, temperature(i,k), patm, lwc, xhno3(i,k)            )
+               call hl_so2%set_conditions(  i, k, temperature(i,k), patm, lwc, xso2(i,k)             )
+               call hl_nh3%set_conditions(  i, k, temperature(i,k), patm, lwc, xnh3(i,k) + xnh4(i,k) )
+               call hl_co2%set_conditions(  i, k, temperature(i,k), patm, lwc, xco2(i,k)             )
+               call hl_h2o2%set_conditions( i, k, temperature(i,k), patm, lwc, xh2o2(i,k)            )
+               call hl_ho2%set_conditions(  i, k, temperature(i,k), patm, lwc, xho2(i,k)             )
+               call hl_o3%set_conditions(   i, k, temperature(i,k), patm, lwc, xo3(i,k)              )
+             end associate ! lwc
              !-----------------------------------------------------------------
              !         ... so4 effect
              !-----------------------------------------------------------------
-             so4_concentration = xso4(i,k)*air_number_density(i,k)   & ! 
-                                 * (1.e3_r8/AVOGADRO) / xl             ! mol(so4)/L(w)
+             so4_aq = xso4(i,k) / molar_to_mixing_ratio(i,k) ! mol(so4)/L(w)
 
              !-----------------------------------------------------------------
              ! 21-mar-2011 chamges by rce
@@ -546,7 +550,7 @@ contains
                 tmp_hco3 = Eco2 / xph(i,k)
                 tmp_oh   = WATER_DISSOCIATION_CONSTANT / xph(i,k)
                 tmp_no3  = Ehno3 / xph(i,k)
-                tmp_so4 = cloud_composition%so4_fact*so4_concentration
+                tmp_so4 = cloud_composition%so4_fact*so4_aq
                 tmp_pos = xph(i,k) + tmp_nh4
                 tmp_neg = tmp_oh + tmp_hco3 + tmp_no3 + tmp_hso3 + tmp_so3 + tmp_so4
 
@@ -625,8 +629,6 @@ contains
     !==============================================================
     ver_loop1: do k = 1,pver
        col_loop1: do i = 1,ncol
-          xl = cloud_composition%xlwc(i,k)
-
           ! This should be dividing by 101325, not 101300, but changing it breaks the tests
           ! FUTURE_ANSWER_CHANGING_MODIFICATION
           patm = midpoint_pressure(i,k) / 101300._r8        ! press is in pascal
@@ -687,7 +689,7 @@ contains
           !       S(IV) + H2O2 = S(VI)
           !............................
 
-          IF (XL .ge. MINIMUM_CLOUD_LIQUID_WATER) THEN    !! WHEN CLOUD IS PRESENTED
+          IF (cloud_composition%xlwc(i,k) .ge. MINIMUM_CLOUD_LIQUID_WATER) THEN    !! WHEN CLOUD IS PRESENTED
 
              call hl_so2%effective_henrys_law_constant( i, k, xph(i,k), Heff_so2(i,k) )
              call hl_o3%effective_henrys_law_constant(  i, k, xph(i,k), Heff_o3(i,k)  )
@@ -713,23 +715,18 @@ contains
                 ! NOTE: uses,
                 !    [H2O2](aq) = [H2O2](aq)
                 !    [SO2](aq)  = [SO2](aq)
-                dso4_dt = k_siv_h2o2 * h2o2_aq * so2_aq
+                dso4_dt = k_siv_h2o2 * h2o2_aq * so2_aq * molar_to_mixing_ratio(i,k) ! mol mol-1 s-1
              else
                 ! NOTE: uses,
                 !    [H2O2](aq) = [H2O2](aq) + [HO2-](aq)
                 !    [SO2](aq)  = [SO2](aq) + [HSO3-](aq) + [SO3--](aq)
                 ! For some reason, assumes a pressure of 1 atm
                 call hl_h2o2%effective_henrys_law_constant( i, k, xph(i,k), Heff_h2o2(i,k) )
-                dso4_dt = k_siv_h2o2 * Heff_h2o2(i,k) * h2o2g * Heff_so2(i,k) * so2g    ! [M/s]
+                dso4_dt = k_siv_h2o2 * Heff_h2o2(i,k) * h2o2g * Heff_so2(i,k) * so2g &
+                          * molar_to_mixing_ratio(i,k)    ! [mol mol-1 s-1]
              endif
 
-             dso4_dt = dso4_dt         & ! [M/s] = [mole/L(w)/s]
-                  * xl                 & ! [mole/L(a)/s]
-                  / (1.e3_r8/AVOGADRO) & ! [/L(a)/s]
-                  / air_number_density(i,k)
-
-             delta_concentration = dso4_dt*time_step
-             delta_concentration = max(delta_concentration, SMALL_NUMBER)
+             delta_concentration = max(dso4_dt*time_step, SMALL_NUMBER)
 
              xso4_init(i,k)=xso4(i,k)
 
@@ -761,9 +758,8 @@ contains
                 end if
              END IF
 
-             if (cloud_borne) then
-                change_in_aq_so4_mixing_ratio(i,k)  =  xso4(i,k) - xso4_init(i,k)
-             endif
+             change_in_aq_so4_mixing_ratio(i,k)  =  xso4(i,k) - xso4_init(i,k)
+
              !...........................
              !       S(IV) + O3 = S(VI)
              !...........................
@@ -775,18 +771,12 @@ contains
              !    see if we should use [SO2](aq) here instead
              !    also, unclear why a pressure of 1 atm is used for non-cloud-borne case
              if (cloud_borne) then
-               dso4_dt = k_siv_o3 * o3_aq * Heff_so2(i,k)*so2g*patm  ! [M/s]
+               dso4_dt = k_siv_o3 * o3_aq * Heff_so2(i,k)*so2g*patm * molar_to_mixing_ratio(i,k) ! [mol mol-1 s-1]
              else
-               dso4_dt = k_siv_o3 * o3_aq * Heff_so2(i,k)*so2g       ! [M/s]
+               dso4_dt = k_siv_o3 * o3_aq * Heff_so2(i,k)*so2g * molar_to_mixing_ratio(i,k)      ! [mol mol-1 s-1]
              endif
 
-             dso4_dt = dso4_dt         &    ! [M/s] =  [mole/L(w)/s]
-                  * xl                 &    ! [mole/L(a)/s]
-                  / (1.e3_r8/AVOGADRO) &    ! [/L(a)/s]
-                  / air_number_density(i,k) ! [mixing ratio/s]
-
-             delta_concentration = dso4_dt*time_step
-             delta_concentration = max(delta_concentration, SMALL_NUMBER)
+             delta_concentration = max(dso4_dt*time_step, SMALL_NUMBER)
 
              xso4_init(i,k)=xso4(i,k)
 
