@@ -282,55 +282,46 @@ contains
     real(r8), parameter :: INITIAL_PH = 5.0_r8  ! Initial pH value
     real(r8), parameter :: MINIMUM_CLOUD_LIQUID_WATER = 1.e-8_r8 ! Minimum cloud liquid water content (kg/kg)
 
-    ! Effective Henry's Law constants for HO2 partitioning
-    ! TODO: skipping remnaming of these in anticipation of a partitioning struct
-    real(r8), parameter :: kh0 = 9.e3_r8            ! HO2(g)          -> Ho2(a)
-    real(r8), parameter :: kh1 = 2.05e-5_r8         ! HO2(a)          -> H+ + O2-
-    real(r8), parameter :: kh2 = 8.6e5_r8           ! HO2(a) + ho2(a) -> h2o2(a) + o2
-    real(r8), parameter :: kh3 = 1.e8_r8            ! HO2(a) + o2-    -> h2o2(a) + o2
-
     ! Change in aqueous sulfate volume mixing ratio over current time step (mol mol-1)
     real(r8) :: change_in_aq_so4_mixing_ratio(ncol,pver)
 
-    ! Partitioning calculators
+    ! Henry's Law Partitioning calculators
     type(henrys_law_t) :: hl_hno3, hl_so2, hl_nh3, hl_co2, hl_h2o2, hl_ho2, hl_o3
 
     ! Equilibrium constants used to determine condensed phase ion concentrations [various units]
     real(r8) :: Eso2, Ehno3, Eco2, Enh3
 
     ! Calculated gas-phase mixing ratios (mol mol-1)
-    real(r8) :: hno3g(ncol,pver), nh3g(ncol,pver)
+    real(r8) :: hno3g(ncol,pver), nh3g(ncol,pver), so2g, h2o2g, o3g
 
     ! Calculated conversion from mol(X) L(H2O)-1 to mol(X) mol(air)-1 based on
     ! cloud liquid water content
     real(r8), dimension(ncol,pver) :: molar_to_mixing_ratio ! L mol-1
 
-    ! TODO: Skipping renaming of these in anticipation of partitioning/pH estimation structs
-    integer  :: k, i, iter
-    real(r8) :: xk, xe, x2
-    real(r8) :: px, patm
-    real(r8) :: so2g, h2o2g, o3g
-    real(r8) :: dh2o2_dt    ! reaction rate for formation of H2O2(aq) (mol mol-1 s-1)
-    real(r8) :: k_siv_h2o2  ! rate constant for reaction of S(IV) with H2O2
-    real(r8) :: k_siv_o3    ! rate constant for reaction of S(IV) with O3
-    real(r8) :: dso4_dt     ! rate of change of SO4
-    real(r8) :: delta_concentration
-
-    !-----------------------------------------------------------------------
-    !            for Ho2(g) -> H2o2(a) formation
-    !            schwartz JGR, 1984, 11589
-    !-----------------------------------------------------------------------
-    real(r8) :: ho2s             ! ho2s = ho2(a)+o2-
-    real(r8) :: dh2o2_dt_mol_L_s ! prod(h2o2) by ho2 in mole/L(w)/s
-    real(r8) :: dh2o2_dt_vmr_s   ! prod(h2o2) by ho2 in mix/s
-
-    ! volume mixing ratios for cloud chemistry species
-    real(r8), dimension(ncol,pver) ::  xhno3, xh2o2, xso2, xso4, xno3, &
-         xnh3, xnh4, xo3, xph, xho2, xh2so4, xmsa, xco2, xso4_init
-
-    real(r8), dimension(ncol,pver) :: air_mass_density_kg_l ! kg L-1
+    ! Mid-point pressure in atm
+    real(r8) :: patm
     
-    ! Effective Henry's Law constants
+    ! Oxidation reaction parameters
+    real(r8) :: dh2o2_dt    ! reaction rate for formation of H2O2(aq) (mol mol-1 s-1)
+    real(r8) :: k_siv_h2o2  ! rate constant for reaction of S(IV) with H2O2 (L mol-1 s-1)
+    real(r8) :: k_siv_o3    ! rate constant for reaction of S(IV) with O3 (L mol-1 s-1)
+    real(r8) :: dso4_dt     ! rate of change of SO4 (mol(SIV) mol(air)-1 s-1)
+    real(r8) :: delta_concentration ! change in concentration of S(IV) over the timestep (mol(SIV) mol(air)-1)
+
+    ! index variables and couters
+    integer  :: k, i, iter
+
+    ! volume mixing ratios for cloud chemistry species (mol mol-1)
+    real(r8), dimension(ncol,pver) ::  xhno3, xh2o2, xso2, xso4, xno3, &
+         xnh3, xnh4, xo3, xho2, xh2so4, xmsa, xco2, xso4_init
+
+    ! [H+] concentration in the aqueous phase (mol L-1)
+    real(r8), dimension(ncol,pver) :: h_plus_conc
+
+    ! air mass density (kg L-1)
+    real(r8), dimension(ncol,pver) :: air_mass_density_kg_l
+    
+    ! Effective Henry's Law constants (mol L-1 atm-1)
     real(r8), dimension(ncol,pver) :: Heff_h2o2, Heff_so2, Heff_o3
 
     ! Aqueous-phase concentrations [mol(X) L(air)-1]
@@ -357,50 +348,76 @@ contains
     !       This appears to have been roughly converted to mol L-1 atm-1 by multiplying by 1.e2,
     !       but this really should have been multiplied by 101325 / 1000 (Pa m3 atm-1 L-1).
     !       FUTURE_ANSWER_CHANGING_MODIFICATION
+    !
     ! Sander, R., 2015. Compilation of Henry's law constants (version 4) for water as solvent.
     ! Atmos. Chem. Phys., 15, 4399–4981, 2015. DOI: 10.5194/acp-15-4399-2015
+    !
+    ! However, this reference cites Schwartz and White (1981) for these values, but gives their
+    ! units in M atm-1 (Schwartz and White, 1981 doesn't appear to be available online):
+    ! Xiaohong Yao, Tsz Yan Ling, Ming Fang, Chak K. Chan,
+    ! Comparison of thermodynamic predictions for in situ pH in PM2.5,
+    ! Atmospheric Environment, Volume 40, Issue 16, 2006, Pages 2835-2844, ISSN 1352-2310,
+    ! DOI: https://doi.org/10.1016/j.atmosenv.2006.01.006.
     hl_hno3 = henrys_law_t( ncol, pver )
     hl_hno3%type_ = HENRYS_LAW_MONOPROTIC_ACID
-    hl_hno3%partitioning_factor_%A_ = 2.1e5_r8
-    hl_hno3%partitioning_factor_%B_ = 8700.0_r8
-    hl_hno3%first_dissociation_factor_%A_ = 15.4_r8    ! TODO: Find reference - could be related to Ka of HNO3
-    hl_hno3%first_dissociation_factor_%B_ = 0.0_r8
+    hl_hno3%partitioning_factor_%A_ = 2.1e5_r8      ! mol m-3 Pa-1 * 100 OR mol L-1 atm-1 ?
+    hl_hno3%partitioning_factor_%B_ = 8700.0_r8     ! K
+    hl_hno3%first_dissociation_factor_%A_ = 15.4_r8 ! M NOTE: This is 15.0 in Yao et al. (2006)
+    hl_hno3%first_dissociation_factor_%B_ = 0.0_r8  ! K
 
     ! SO2 partitioning parameters
     !
-    ! TODO: Find reference for these values
+    ! The values used here as the same as those used in the following paper (probably from some other source):
+    ! Lu et al. Assessmment of the impacts of cloud chemistry on surface SO2 and sulfate levels in typical regions of China
+    ! Atmos. Chem. Phys., 23, 8021–8037, 2023
+    ! https://doi.org/10.5194/acp-23-8021-2023
+    ! 
+    ! Chameides, W. L. (1984), The photochemistry of a remote marine stratiform cloud,
+    ! J. Geophys. Res., 89(D3), 4739–4755, doi:10.1029/JD089iD03p04739.
+    ! Original source: National Bureau of Standards [1965]
+    !
+    ! FUTURE_ANSWER_CHANGING_MODIFICATION - The partitioning factor's A value in
+    ! both of the above references in 1.23 M atm-1, a factor of 10^3 smaller that the value here.
+    ! All the values for the Henry's Law constants in:
+    ! Sander, R., 2015. Compilation of Henry's law constants (version 4) for water as solvent.
+    ! Atmos. Chem. Phys., 15, 4399–4981, 2015. DOI: 10.5194/acp-15-4399-2015
+    ! are also on the order of 10^3 smaller than the values used here.
     hl_so2 = henrys_law_t( ncol, pver )
     hl_so2%type_ = HENRYS_LAW_DIPROTIC_ACID
-    hl_so2%partitioning_factor_%A_ = 1.23e3_r8
-    hl_so2%partitioning_factor_%B_ = 3120.0_r8
-    hl_so2%first_dissociation_factor_%A_ = 1.7e-2_r8
-    hl_so2%first_dissociation_factor_%B_ = 2090.0_r8
-    hl_so2%second_dissociation_factor_%A_ = 6.0e-8_r8
-    hl_so2%second_dissociation_factor_%B_ = 1120.0_r8
+    hl_so2%partitioning_factor_%A_ = 1.23e3_r8         ! M atm-1 NOTE: This seems to be 1000x too large
+    hl_so2%partitioning_factor_%B_ = 3120.0_r8         ! K
+    hl_so2%first_dissociation_factor_%A_ = 1.7e-2_r8   ! M
+    hl_so2%first_dissociation_factor_%B_ = 2090.0_r8   ! K
+    hl_so2%second_dissociation_factor_%A_ = 6.0e-8_r8  ! M
+    hl_so2%second_dissociation_factor_%B_ = 1120.0_r8  ! K
 
     ! NH3 partitioning parameters
     !
-    ! TODO: Find reference for these values
+    ! Chameides, W. L. (1984), The photochemistry of a remote marine stratiform cloud,
+    ! J. Geophys. Res., 89(D3), 4739–4755, doi:10.1029/JD089iD03p04739.
+    ! Original source: National Bureau of Standards [1965]
     hl_nh3 = henrys_law_t( ncol, pver )
     hl_nh3%type_ = HENRYS_LAW_BASE
-    hl_nh3%partitioning_factor_%A_ = 58.0_r8
-    hl_nh3%partitioning_factor_%B_ = 4085.0_r8
-    hl_nh3%protonation_factor_%A_ = 1.7e-5_r8
-    hl_nh3%protonation_factor_%B_ = -4325.0_r8
+    hl_nh3%partitioning_factor_%A_ = 58.0_r8   ! M atm-1
+    hl_nh3%partitioning_factor_%B_ = 4085.0_r8 ! K
+    hl_nh3%protonation_factor_%A_ = 1.7e-5_r8  ! M
+    hl_nh3%protonation_factor_%B_ = -4325.0_r8 ! K
 
     ! CO2 partitioning parameters
     !
-    ! TODO: Find reference for these values
+    ! Chameides, W. L. (1984), The photochemistry of a remote marine stratiform cloud,
+    ! J. Geophys. Res., 89(D3), 4739–4755, doi:10.1029/JD089iD03p04739.
+    ! Original source: National Bureau of Standards [1965]
     hl_co2 = henrys_law_t( ncol, pver )
     hl_co2%type_ = HENRYS_LAW_CO2
-    hl_co2%partitioning_factor_%A_ = 3.1e-2_r8
-    hl_co2%partitioning_factor_%B_ = 2423.0_r8
-    hl_co2%first_dissociation_factor_%A_ = 4.3e-7_r8
-    hl_co2%first_dissociation_factor_%B_ = -913.0_r8
+    hl_co2%partitioning_factor_%A_ = 3.1e-2_r8        ! M atm-1 NOTE: 3.11e-2 in Chameides (1984)
+    hl_co2%partitioning_factor_%B_ = 2423.0_r8        ! K
+    hl_co2%first_dissociation_factor_%A_ = 4.3e-7_r8  ! M
+    hl_co2%first_dissociation_factor_%B_ = -913.0_r8  ! K
 
     ! H2O2 paritioning parameters
     !
-    ! TODO: Find reference for these values
+    ! NOTE: I can't find a source for these values.
     hl_h2o2 = henrys_law_t( ncol, pver )
     hl_h2o2%type_ = HENRYS_LAW_MONOPROTIC_ACID
     hl_h2o2%partitioning_factor_%A_ = 7.4e4_r8
@@ -409,28 +426,39 @@ contains
     hl_h2o2%first_dissociation_factor_%B_ = -3730.0_r8
 
     ! HO2 partitioning parameters
-    !
     !       ... for Ho2(g) -> H2o2(a) formation
-    !           schwartz JGR, 1984, 11589
-    ! TODO: Find reference for these values
+    ! Chameides, W. L. (1984), The photochemistry of a remote marine stratiform cloud,
+    ! J. Geophys. Res., 89(D3), 4739–4755, doi:10.1029/JD089iD03p04739.
+    ! Original sources: National Bureau of Standards [1965], Bielski [1978],
+    !                  and Chalmeides and Davis [1982]
+    ! Schwartz, S. E. (1984), Gas- and aqueous-phase chemistry of HO2 in Liquid Water Clouds,
+    ! J. Geophys. Res., 89(D7), 11589–11598
+    ! Original source: JPL-82, Bieliski [1978]
     hl_ho2 = henrys_law_t( ncol, pver )
     hl_ho2%type_ = HENRYS_LAW_HO2
-    hl_ho2%partitioning_factor_%A_ = 9.0e3_r8
-    hl_ho2%partitioning_factor_%B_ = 0.0_r8
-    hl_ho2%ho2__hplus_o2minus_%A_ = 2.05e-5_r8
-    hl_ho2%ho2__hplus_o2minus_%B_ = 0.0_r8
-    hl_ho2%ho2_ho2__h2o2_o2_%A_ = 8.6e5_r8
-    hl_ho2%ho2_ho2__h2o2_o2_%B_ = 0.0_r8
-    hl_ho2%ho2_o2minus__h2o2_o2_%A_ = 1.0e8_r8 
-    hl_ho2%ho2_o2minus__h2o2_o2_%B_ = 0.0_r8
+    hl_ho2%partitioning_factor_%A_ = 9.0e3_r8    ! M atm-1 NOTE: This is from Chameides (1984)
+    hl_ho2%partitioning_factor_%B_ = 0.0_r8      ! K
+    hl_ho2%ho2__hplus_o2minus_%A_ = 2.05e-5_r8   ! M NOTE: This is in both Chameides (1984) and Schwartz (1984)
+    hl_ho2%ho2__hplus_o2minus_%B_ = 0.0_r8       ! K
+    hl_ho2%ho2_ho2__h2o2_o2_%A_ = 8.6e5_r8       ! L2 mol-2 s-1 NOTE: This is from Schwartz (1984)
+    hl_ho2%ho2_ho2__h2o2_o2_%B_ = 0.0_r8         ! K
+    hl_ho2%ho2_o2minus__h2o2_o2_%A_ = 1.0e8_r8   ! L mol-1 s-1 NOTE: This is from Schwartz (1984)
+    hl_ho2%ho2_o2minus__h2o2_o2_%B_ = 0.0_r8     ! K
 
     ! O3 paritioning parameters
     !
-    ! TODO: Find reference for these values
+    ! The values used here as the same as those used in the following paper (probably from some other source):
+    ! Lu et al. Assessmment of the impacts of cloud chemistry on surface SO2 and sulfate levels in typical regions of China
+    ! Atmos. Chem. Phys., 23, 8021–8037, 2023
+    ! https://doi.org/10.5194/acp-23-8021-2023
+    !
+    ! Chameides, W. L. (1984), The photochemistry of a remote marine stratiform cloud,
+    ! J. Geophys. Res., 89(D3), 4739–4755, doi:10.1029/JD089iD03p04739.
+    ! Original source: National Bureau of Standards [1965]
     hl_o3 = henrys_law_t( ncol, pver )
     hl_o3%type_ = HENRYS_LAW_NEUTRAL
-    hl_o3%partitioning_factor_%A_ = 1.15e-2_r8
-    hl_o3%partitioning_factor_%B_ = 2560.0_r8
+    hl_o3%partitioning_factor_%A_ = 1.15e-2_r8 ! M atm-1
+    hl_o3%partitioning_factor_%B_ = 2560.0_r8  ! K
 
     !==================================================================
     !       ... First set the PH
@@ -461,7 +489,7 @@ contains
     call h2so4%mixing_ratio( species_vmr, fixed_concentrations, air_number_density, xh2so4 )
     call co2%mixing_ratio(   species_vmr, fixed_concentrations, air_number_density, xco2   )
 
-    xph(:,:) = 10._r8**(-INITIAL_PH)                                ! initial PH value
+    h_plus_conc(:,:) = 10._r8**(-INITIAL_PH) ! initial [H+] (mol L-1)
 
     !-----------------------------------------------------------------
     !       ... Temperature dependent Henry constants
@@ -534,24 +562,24 @@ contains
                 end if
 
                 ! calc current [H+] from ph
-                xph(i,k) = 10.0_r8**(-yph)
+                h_plus_conc(i,k) = 10.0_r8**(-yph)
 
                 !-----------------------------------------------------------------
                 ! Get equilibrium constants for the current pH
                 !-----------------------------------------------------------------
-                call hl_hno3%equilibrium_constant( i, k, xph(i,k), Ehno3 )
-                call hl_so2%equilibrium_constant(  i, k, xph(i,k), Eso2  )
-                call hl_nh3%equilibrium_constant(  i, k, xph(i,k), Enh3  )
-                call hl_co2%equilibrium_constant(  i, k, xph(i,k), Eco2  )
+                call hl_hno3%equilibrium_constant( i, k, h_plus_conc(i,k), Ehno3 )
+                call hl_so2%equilibrium_constant(  i, k, h_plus_conc(i,k), Eso2  )
+                call hl_nh3%equilibrium_constant(  i, k, h_plus_conc(i,k), Enh3  )
+                call hl_co2%equilibrium_constant(  i, k, h_plus_conc(i,k), Eco2  )
 
-                tmp_nh4  = Enh3 * xph(i,k)
-                tmp_hso3 = Eso2 / xph(i,k)
-                tmp_so3  = tmp_hso3 * 2.0_r8*hl_so2%terms_(5,i,k)/xph(i,k)
-                tmp_hco3 = Eco2 / xph(i,k)
-                tmp_oh   = WATER_DISSOCIATION_CONSTANT / xph(i,k)
-                tmp_no3  = Ehno3 / xph(i,k)
+                tmp_nh4  = Enh3 * h_plus_conc(i,k)
+                tmp_hso3 = Eso2 / h_plus_conc(i,k)
+                tmp_so3  = tmp_hso3 * 2.0_r8*hl_so2%terms_(5,i,k) / h_plus_conc(i,k)
+                tmp_hco3 = Eco2 / h_plus_conc(i,k)
+                tmp_oh   = WATER_DISSOCIATION_CONSTANT / h_plus_conc(i,k)
+                tmp_no3  = Ehno3 / h_plus_conc(i,k)
                 tmp_so4 = cloud_composition%so4_fact*so4_aq
-                tmp_pos = xph(i,k) + tmp_nh4
+                tmp_pos = h_plus_conc(i,k) + tmp_nh4
                 tmp_neg = tmp_oh + tmp_hco3 + tmp_no3 + tmp_hso3 + tmp_so3 + tmp_so4
 
                 ynetpos = tmp_pos - tmp_neg
@@ -563,7 +591,7 @@ contains
                 if (iter > 2) then
                    if (ynetpos == 0.0_r8) then
                       ! the exact solution was found (very unlikely)
-                      tmp_hp = xph(i,k)
+                      tmp_hp = h_plus_conc(i,k)
                       converged = .true.
                       exit
                    else if (ynetpos >= 0.0_r8) then
@@ -582,9 +610,9 @@ contains
                       ! |yph_hi - yph_lo| <= convergence criterion, so set
                       !    final ph to their midpoint and exit
                       ! (.005 absolute error in pH gives .01 relative error in H+)
-                      tmp_hp = xph(i,k)
+                      tmp_hp = h_plus_conc(i,k)
                       yph = 0.5_r8*(yph_hi + yph_lo)
-                      xph(i,k) = 10.0_r8**(-yph)
+                      h_plus_conc(i,k) = 10.0_r8**(-yph)
                       converged = .true.
                       exit
                    else
@@ -596,7 +624,7 @@ contains
                    if (ynetpos <= 0.0_r8) then
                       ! the lower and upper bound ph values (2.0 and 7.0) do not bracket
                       !    the correct ph, so use the lower bound
-                      tmp_hp = xph(i,k)
+                      tmp_hp = h_plus_conc(i,k)
                       converged = .true.
                       exit
                    end if
@@ -606,7 +634,7 @@ contains
                    if (ynetpos >= 0.0_r8) then
                       ! the lower and upper bound ph values (2.0 and 7.0) do not bracket
                       !    the correct ph, so use they upper bound
-                      tmp_hp = xph(i,k)
+                      tmp_hp = h_plus_conc(i,k)
                       converged = .true.
                       exit
                    end if
@@ -619,7 +647,7 @@ contains
                 write(iulog,*) 'Cloud aqueous chemistry: pH failed to converge @ (',i,',',k,')'
              end if
           else
-             xph(i,k) =  1.e-7_r8
+             h_plus_conc(i,k) =  1.e-7_r8 ! neutral pH
           end if
        end do col_loop0
     end do ver_loop0 ! end pver loop for STEP 0
@@ -640,18 +668,18 @@ contains
           ! Account for H2O2(aq) in cloud water from HO2 uptake
           ! TODO: Investigate whether this should be done for cloud_borne aerosols
           if ( .not. cloud_borne ) then
-             call hl_ho2%reaction_rate( i, k, xph(i,k), xho2(i,k), dh2o2_dt )
+             call hl_ho2%reaction_rate( i, k, h_plus_conc(i,k), xho2(i,k), dh2o2_dt )
              xh2o2(i,k) = xh2o2(i,k) + dh2o2_dt * time_step
           endif
 
           !-----------------------------------------------
           !       ... Partioning
           !-----------------------------------------------
-          call hl_nh3%gas_phase_mixing_ratio(  i, k, xph(i,k), xnh3(i,k)+xnh4(i,k),  nh3g(i,k)  )
-          call hl_hno3%gas_phase_mixing_ratio( i, k, xph(i,k), xhno3(i,k)+xno3(i,k), hno3g(i,k) )
-          call hl_so2%gas_phase_mixing_ratio(  i, k, xph(i,k), xso2(i,k),            so2g       )
-          call hl_h2o2%gas_phase_mixing_ratio( i, k, xph(i,k), xh2o2(i,k),           h2o2g      )
-          call hl_o3%gas_phase_mixing_ratio(   i, k, xph(i,k), xo3(i,k),             o3g        )
+          call hl_nh3%gas_phase_mixing_ratio(  i, k, h_plus_conc(i,k), xnh3(i,k)+xnh4(i,k),  nh3g(i,k)  )
+          call hl_hno3%gas_phase_mixing_ratio( i, k, h_plus_conc(i,k), xhno3(i,k)+xno3(i,k), hno3g(i,k) )
+          call hl_so2%gas_phase_mixing_ratio(  i, k, h_plus_conc(i,k), xso2(i,k),            so2g       )
+          call hl_h2o2%gas_phase_mixing_ratio( i, k, h_plus_conc(i,k), xh2o2(i,k),           h2o2g      )
+          call hl_o3%gas_phase_mixing_ratio(   i, k, h_plus_conc(i,k), xo3(i,k),             o3g        )
 
           !-----------------------------------------------
           !       ... Aqueous phase reaction rates
@@ -661,14 +689,14 @@ contains
           !           (1) Seinfeld
           !           (2) Benkovitz
           !-----------------------------------------------
-
           IF (cloud_composition%xlwc(i,k) .ge. MINIMUM_CLOUD_LIQUID_WATER) THEN    !! WHEN CLOUD IS PRESENTED
 
-             call hl_so2%effective_henrys_law_constant( i, k, xph(i,k), Heff_so2(i,k) )
-             call hl_o3%effective_henrys_law_constant(  i, k, xph(i,k), Heff_o3(i,k)  )
-             call hl_h2o2%partitioned_species_concentration( i, k, xph(i,k), xh2o2(i,k), patm, h2o2_aq )
-             call hl_so2%partitioned_species_concentration(  i, k, xph(i,k), xso2(i,k),  patm, so2_aq  )
-             call hl_o3%partitioned_species_concentration(   i, k, xph(i,k), xo3(i,k),   patm, o3_aq   )
+             call hl_so2%effective_henrys_law_constant( i, k, h_plus_conc(i,k), Heff_so2(i,k) )
+             call hl_o3%effective_henrys_law_constant(  i, k, h_plus_conc(i,k), Heff_o3(i,k)  )
+             
+             call hl_h2o2%partitioned_species_concentration( i, k, h_plus_conc(i,k), xh2o2(i,k), patm, h2o2_aq )
+             call hl_so2%partitioned_species_concentration(  i, k, h_plus_conc(i,k), xso2(i,k),  patm, so2_aq  )
+             call hl_o3%partitioned_species_concentration(   i, k, h_plus_conc(i,k), xo3(i,k),   patm, o3_aq   )
 
              !------------------------------------------------------------------------
              !       ... S(IV) (HSO3) + H2O2
@@ -689,7 +717,7 @@ contains
              ! In the S(IV) + O3 reaction, it also appears to be inconsistently using the
              ! total of [SO2](aq), [HSO3-](aq), and [SO3--](aq) in the reaction rate calculation
              k_siv_h2o2 = 8.e4_r8 * EXP( -3650._r8*(1._r8 / temperature(i,k) - 1._r8 / 298._r8) )  &
-                          / (.1_r8 + xph(i,k))
+                          / (.1_r8 + h_plus_conc(i,k))
              if (cloud_borne) then
                 ! NOTE: uses,
                 !    [H2O2](aq) = [H2O2](aq)
@@ -700,13 +728,13 @@ contains
                 !    [H2O2](aq) = [H2O2](aq) + [HO2-](aq)
                 !    [SO2](aq)  = [SO2](aq) + [HSO3-](aq) + [SO3--](aq)
                 ! For some reason, assumes a pressure of 1 atm
-                call hl_h2o2%effective_henrys_law_constant( i, k, xph(i,k), Heff_h2o2(i,k) )
+                call hl_h2o2%effective_henrys_law_constant( i, k, h_plus_conc(i,k), Heff_h2o2(i,k) )
                 dso4_dt = k_siv_h2o2 * Heff_h2o2(i,k) * h2o2g * Heff_so2(i,k) * so2g &
                           * molar_to_mixing_ratio(i,k)    ! [mol mol-1 s-1]
              endif
              delta_concentration = max(dso4_dt*time_step, SMALL_NUMBER)
 
-! FUTURE_ANSWER_CHANGING_MODIFICATION - simplify this logic and use consistent logic
+! FUTURE_ANSWER_CHANGING_MODIFICATION - simplify and use consistent logic
 #if 0
              delta_concentration = min(delta_concentration, min(xh2o2(i,k), xso2(i,k)))
              xso4(i,k)  = max(xso4(i,k)  + delta_concentration, SMALL_NUMBER)
@@ -757,7 +785,7 @@ contains
              !    see if we should use [SO2](aq) here instead
              !    also, unclear why a pressure of 1 atm is used for non-cloud-borne case
              k_siv_o3   = 4.39e11_r8 * EXP(-4131._r8/temperature(i,k))  &
-                          + 2.56e3_r8  * EXP(-996._r8 /temperature(i,k)) /xph(i,k)
+                          + 2.56e3_r8  * EXP(-996._r8 /temperature(i,k)) / h_plus_conc(i,k)
              if (cloud_borne) then
                dso4_dt = k_siv_o3 * o3_aq * Heff_so2(i,k)*so2g*patm * molar_to_mixing_ratio(i,k) ! [mol mol-1 s-1]
              else
@@ -783,7 +811,7 @@ contains
     do k = 1, pver
        do i = 1, ncol
           if (cloud_fraction(i,k)>=1.e-5_r8 .and. cloud_water(i,k)>=1.e-8_r8) then
-             ph_times_cloud_water(i,k) = -1._r8*log10(xph(i,k)) * cloud_water(i,k)
+             ph_times_cloud_water(i,k) = -1._r8*log10(h_plus_conc(i,k)) * cloud_water(i,k)
           endif
        end do
     end do
