@@ -633,61 +633,34 @@ contains
           ! FUTURE_ANSWER_CHANGING_MODIFICATION
           patm = midpoint_pressure(i,k) / 101300._r8        ! press is in pascal
 
-          !-----------------------------------------------
-          !       ... Partioning
-          !-----------------------------------------------
-          call hl_hno3%gas_phase_mixing_ratio( i, k, xph(i,k), xhno3(i,k)+xno3(i,k), hno3g(i,k) )
-          call hl_so2%gas_phase_mixing_ratio(  i, k, xph(i,k), xso2(i,k), so2g )
           ! Remove NH3/NH4 associated with NH4HSO4 in clouds
           if (cloud_borne .and. cloud_fraction(i,k)>0._r8) then
              xnh4(i,k) = xnh4(i,k) - cloud_composition%nh4c(i,k) / cloud_fraction(i,k)
           endif
-          call hl_nh3%gas_phase_mixing_ratio(  i, k, xph(i,k), xnh3(i,k)+xnh4(i,k), nh3g(i,k) )
           ! Account for H2O2(aq) in cloud water from HO2 uptake
           ! TODO: Investigate whether this should be done for cloud_borne aerosols
           if ( .not. cloud_borne ) then
              call hl_ho2%reaction_rate( i, k, xph(i,k), xho2(i,k), dh2o2_dt )
              xh2o2(i,k) = xh2o2(i,k) + dh2o2_dt * time_step
           endif
-          call hl_h2o2%gas_phase_mixing_ratio( i, k, xph(i,k), xh2o2(i,k), h2o2g )
-          call hl_o3%gas_phase_mixing_ratio( i, k, xph(i,k), xo3(i,k), o3g )
+
+          !-----------------------------------------------
+          !       ... Partioning
+          !-----------------------------------------------
+          call hl_nh3%gas_phase_mixing_ratio(  i, k, xph(i,k), xnh3(i,k)+xnh4(i,k),  nh3g(i,k)  )
+          call hl_hno3%gas_phase_mixing_ratio( i, k, xph(i,k), xhno3(i,k)+xno3(i,k), hno3g(i,k) )
+          call hl_so2%gas_phase_mixing_ratio(  i, k, xph(i,k), xso2(i,k),            so2g       )
+          call hl_h2o2%gas_phase_mixing_ratio( i, k, xph(i,k), xh2o2(i,k),           h2o2g      )
+          call hl_o3%gas_phase_mixing_ratio(   i, k, xph(i,k), xo3(i,k),             o3g        )
 
           !-----------------------------------------------
           !       ... Aqueous phase reaction rates
           !           SO2 + H2O2 -> SO4
           !           SO2 + O3   -> SO4
-          !-----------------------------------------------
-
-          !------------------------------------------------------------------------
-          !       ... S(IV) (HSO3) + H2O2
-          ! (https://acp.copernicus.org/articles/24/1467/2024/acp-24-1467-2024.pdf)
-          !------------------------------------------------------------------------
-          k_siv_h2o2 = 8.e4_r8 * EXP( -3650._r8*(1._r8 / temperature(i,k) - 1._r8 / 298._r8) )  &
-               / (.1_r8 + xph(i,k))
-
-          !------------------------------------------------------------------------
-          !        ... S(IV)+ O3
-          ! (https://acp.copernicus.org/articles/24/1467/2024/acp-24-1467-2024.pdf)
-          !------------------------------------------------------------------------
-          k_siv_o3   = 4.39e11_r8 * EXP(-4131._r8/temperature(i,k))  &
-               + 2.56e3_r8  * EXP(-996._r8 /temperature(i,k)) /xph(i,k)
-
-          !-----------------------------------------------------------------
-          !       ... Prediction after aqueous phase
-          !       so4
-          !       When Cloud is present
-          !
-          !       S(IV) + H2O2 = S(VI)
-          !       S(IV) + O3   = S(VI)
-          !
           !       reference:
           !           (1) Seinfeld
           !           (2) Benkovitz
-          !-----------------------------------------------------------------
-
-          !............................
-          !       S(IV) + H2O2 = S(VI)
-          !............................
+          !-----------------------------------------------
 
           IF (cloud_composition%xlwc(i,k) .ge. MINIMUM_CLOUD_LIQUID_WATER) THEN    !! WHEN CLOUD IS PRESENTED
 
@@ -697,6 +670,10 @@ contains
              call hl_so2%partitioned_species_concentration(  i, k, xph(i,k), xso2(i,k),  patm, so2_aq  )
              call hl_o3%partitioned_species_concentration(   i, k, xph(i,k), xo3(i,k),   patm, o3_aq   )
 
+             !------------------------------------------------------------------------
+             !       ... S(IV) (HSO3) + H2O2
+             ! (https://acp.copernicus.org/articles/24/1467/2024/acp-24-1467-2024.pdf)
+             !------------------------------------------------------------------------
              ! FUTURE_ANSWER_CHANGING_MODIFICATION
              ! It is unclear why different logic is used here for cloud_borne/not cloud_borne
              ! Specifically, there is no explanation for why pressure should be 1.0 atm in the
@@ -711,6 +688,8 @@ contains
              !
              ! In the S(IV) + O3 reaction, it also appears to be inconsistently using the
              ! total of [SO2](aq), [HSO3-](aq), and [SO3--](aq) in the reaction rate calculation
+             k_siv_h2o2 = 8.e4_r8 * EXP( -3650._r8*(1._r8 / temperature(i,k) - 1._r8 / 298._r8) )  &
+                          / (.1_r8 + xph(i,k))
              if (cloud_borne) then
                 ! NOTE: uses,
                 !    [H2O2](aq) = [H2O2](aq)
@@ -725,9 +704,16 @@ contains
                 dso4_dt = k_siv_h2o2 * Heff_h2o2(i,k) * h2o2g * Heff_so2(i,k) * so2g &
                           * molar_to_mixing_ratio(i,k)    ! [mol mol-1 s-1]
              endif
-
              delta_concentration = max(dso4_dt*time_step, SMALL_NUMBER)
 
+! FUTURE_ANSWER_CHANGING_MODIFICATION - simplify this logic and use consistent logic
+#if 0
+             delta_concentration = min(delta_concentration, min(xh2o2(i,k), xso2(i,k)))
+             xso4(i,k)  = max(xso4(i,k)  + delta_concentration, SMALL_NUMBER)
+             xh2o2(i,k) = max(xh2o2(i,k) - delta_concentration, SMALL_NUMBER)
+             xso2(i,k)  = max(xso2(i,k)  - delta_concentration, 1.0e-20_r8) ! FUTURE_ANSWER_CHANGING_MODIFICATION Use SMALL_NUMBER?
+             change_in_aq_so4_mixing_ratio(i,k) = delta_concentration
+#else
              xso4_init(i,k)=xso4(i,k)
 
              IF (xh2o2(i,k) .gt. xso2(i,k)) THEN
@@ -759,34 +745,29 @@ contains
              END IF
 
              change_in_aq_so4_mixing_ratio(i,k)  =  xso4(i,k) - xso4_init(i,k)
-
-             !...........................
+#endif
+             !------------------------------------------------------------------------
              !       S(IV) + O3 = S(VI)
-             !...........................
-
+             ! (https://acp.copernicus.org/articles/24/1467/2024/acp-24-1467-2024.pdf)
+             !------------------------------------------------------------------------
              ! NOTE: uses,
              !   [SO2](aq) = [SO2](aq) + [HSO3-](aq) + [SO3--](aq)
              !   [O3](aq)  = [O3](aq)
              ! FUTURE_ANSWER_CHANGING_MODIFICATION
              !    see if we should use [SO2](aq) here instead
              !    also, unclear why a pressure of 1 atm is used for non-cloud-borne case
+             k_siv_o3   = 4.39e11_r8 * EXP(-4131._r8/temperature(i,k))  &
+                          + 2.56e3_r8  * EXP(-996._r8 /temperature(i,k)) /xph(i,k)
              if (cloud_borne) then
                dso4_dt = k_siv_o3 * o3_aq * Heff_so2(i,k)*so2g*patm * molar_to_mixing_ratio(i,k) ! [mol mol-1 s-1]
              else
                dso4_dt = k_siv_o3 * o3_aq * Heff_so2(i,k)*so2g * molar_to_mixing_ratio(i,k)      ! [mol mol-1 s-1]
              endif
-
              delta_concentration = max(dso4_dt*time_step, SMALL_NUMBER)
-
-             xso4_init(i,k)=xso4(i,k)
-
-             if (delta_concentration .gt. xso2(i,k)) then
-                xso4(i,k) = xso4(i,k) + xso2(i,k)
-                xso2(i,k) = 1.e-20_r8 ! TODO: See if SMALL_NUMBER is more appropriate
-             else
-                xso4(i,k) = xso4(i,k) + delta_concentration
-                xso2(i,k) = xso2(i,k) - delta_concentration
-             end if
+             delta_concentration = min(delta_concentration, xso2(i,k))
+             xso4_init(i,k) = xso4(i,k)
+             xso4(i,k) = max(xso4(i,k) + delta_concentration, SMALL_NUMBER)
+             xso2(i,k) = max(xso2(i,k) - delta_concentration, 1.0e-20_r8) ! FUTURE_ANSWER_CHANGING_MODIFICATION Use SMALL_NUMBER?
 
           END IF !! WHEN CLOUD IS PRESENTED
 
