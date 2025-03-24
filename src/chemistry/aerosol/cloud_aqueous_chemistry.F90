@@ -749,6 +749,7 @@ contains
                       xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
                       xso2(i,k)=1.e-20_r8 ! TODO: See if SMALL_NUMBER is more appropriate
                    else       ! ???? bug ????
+                      ! FUTURE_ANSWER_CHANGING_MODIFICATION - this appears to be incorrect
                       xso2(i,k)=1.e-20_r8 ! TODO: See if SMALL_NUMBER is more appropriate
                       xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
                    endif
