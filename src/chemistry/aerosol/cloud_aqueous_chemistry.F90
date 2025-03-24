@@ -376,15 +376,13 @@ contains
     ! J. Geophys. Res., 89(D3), 4739–4755, doi:10.1029/JD089iD03p04739.
     ! Original source: National Bureau of Standards [1965]
     !
-    ! FUTURE_ANSWER_CHANGING_MODIFICATION - The partitioning factor's A value in
-    ! both of the above references in 1.23 M atm-1, a factor of 10^3 smaller that the value here.
     ! All the values for the Henry's Law constants in:
     ! Sander, R., 2015. Compilation of Henry's law constants (version 4) for water as solvent.
     ! Atmos. Chem. Phys., 15, 4399–4981, 2015. DOI: 10.5194/acp-15-4399-2015
     ! are also on the order of 10^3 smaller than the values used here.
     hl_so2 = henrys_law_t( ncol, pver )
     hl_so2%type_ = HENRYS_LAW_DIPROTIC_ACID
-    hl_so2%partitioning_factor_%A_ = 1.23e3_r8         ! M atm-1 NOTE: This seems to be 1000x too large
+    hl_so2%partitioning_factor_%A_ = 1.23_r8           ! M atm-1
     hl_so2%partitioning_factor_%B_ = 3120.0_r8         ! K
     hl_so2%first_dissociation_factor_%A_ = 1.7e-2_r8   ! M
     hl_so2%first_dissociation_factor_%B_ = 2090.0_r8   ! K
