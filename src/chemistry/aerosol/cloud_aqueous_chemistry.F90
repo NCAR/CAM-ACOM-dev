@@ -150,7 +150,7 @@ contains
     so4   = cloud_species_t( 'SO4'   )
     h2so4 = cloud_species_t( 'H2SO4' )
     ! This will use the CO2 from the model state if available, unlike the original hard-coded value
-    ! FUTURE_ANSWER_CHANGING_MODIFICATION
+    ! FUTURE_ANSWER_CHANGING_MODIFICATION - Disable cloud chemistry when CO2 is not available, remove default value
     co2   = cloud_species_t( 'CO2',  default_mixing_ratio=330.0e-6_r8 )
 
     do_cloud_aqueous_chemistry = so2%exists() .and. h2o2%exists() .and. &
