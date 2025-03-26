@@ -358,6 +358,11 @@ contains
     ! Comparison of thermodynamic predictions for in situ pH in PM2.5,
     ! Atmospheric Environment, Volume 40, Issue 16, 2006, Pages 2835-2844, ISSN 1352-2310,
     ! DOI: https://doi.org/10.1016/j.atmosenv.2006.01.006.
+    !
+    ! JPL 19-5 () Lists several models for determining H_eff for HNO3 in acidic solutions,
+    ! but doesn't seem to include equations in the text:
+    !   "These models and the Carslaw et al. review should be consulted for plots/predictions
+    !    of H* for HNO3 and HCl in strong acid solutions over the atmospheric temperature range."
     hl_hno3 = henrys_law_t( ncol, pver )
     hl_hno3%type_ = HENRYS_LAW_MONOPROTIC_ACID
     hl_hno3%partitioning_factor_%A_ = 2.1e5_r8      ! mol m-3 Pa-1 * 100 OR mol L-1 atm-1 ?
@@ -379,7 +384,6 @@ contains
     ! All the values for the Henry's Law constants in:
     ! Sander, R., 2015. Compilation of Henry's law constants (version 4) for water as solvent.
     ! Atmos. Chem. Phys., 15, 4399–4981, 2015. DOI: 10.5194/acp-15-4399-2015
-    ! are also on the order of 10^3 smaller than the values used here.
     hl_so2 = henrys_law_t( ncol, pver )
     hl_so2%type_ = HENRYS_LAW_DIPROTIC_ACID
     hl_so2%partitioning_factor_%A_ = 1.23_r8           ! M atm-1
