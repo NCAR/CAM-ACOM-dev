@@ -1,4 +1,15 @@
 ! Mocked dependencies of cloud aqueous chemistry module
+! modified to include randomly generated data for species
+! not included in the configuration used to generate the
+! snapshot file.
+module chemistry_test_data
+  implicit none
+  public
+  logical :: do_debug_logging = .false.
+  integer :: debug_column = 13
+  integer :: debug_level = 26
+end module chemistry_test_data
+
 module shr_kind_mod
   implicit none
   public :: shr_kind_r8
@@ -49,6 +60,12 @@ contains
       get_spc_ndx = 0
     case ('H2SO4')
       get_spc_ndx = 8
+    case ('NH3')
+      get_spc_ndx = 1
+    case ('HNO3')
+      get_spc_ndx = 2
+    case ('MSA')
+      get_spc_ndx = 3
     case default
       get_spc_ndx = -1
     end select
@@ -141,6 +158,47 @@ contains
   end subroutine endrun
 end module cam_abortutils
 
+module rad_constituents
+  use shr_kind_mod, only : r8 => shr_kind_r8
+  implicit none
+  public :: rad_cnst_get_info, rad_cnst_get_info_by_bin, rad_cnst_get_bin_props_by_idx
+contains
+  subroutine rad_cnst_get_info(list_idx, nbins)
+    integer, intent(in) :: list_idx
+    integer, optional, intent(out) :: nbins
+    if(present(nbins)) then
+      nbins = 0
+    end if
+  end subroutine rad_cnst_get_info
+  subroutine rad_cnst_get_info_by_bin(list_idx, bin_idx, nspec, bin_name)
+    integer, intent(in) :: list_idx
+    integer, intent(in) :: bin_idx
+    integer, optional, intent(out) :: nspec
+    character(len=*), optional, intent(out) :: bin_name
+    if(present(bin_name)) then
+      bin_name = 'something'
+    end if
+    if(present(nspec)) then
+      nspec = 0
+    end if
+  end subroutine rad_cnst_get_info_by_bin
+  subroutine rad_cnst_get_bin_props_by_idx(list_idx, bin_idx, spec_idx, spectype)
+    integer, intent(in) :: list_idx
+    integer, intent(in) :: bin_idx
+    integer, intent(in) :: spec_idx
+    character(len=*), optional, intent(out) :: spectype
+    if(present(spectype)) then
+      spectype = 'something else'
+    end if
+  end subroutine rad_cnst_get_bin_props_by_idx
+end module rad_constituents
+
+module aerosol_properties_mod
+  implicit none
+  public :: aero_name_len
+  integer, parameter :: aero_name_len = 32
+end module aerosol_properties_mod
+
 module modal_aero_data
   use shr_kind_mod, only : r8 => shr_kind_r8
   implicit none
@@ -159,3 +217,29 @@ module modal_aero_data
   real(kind=r8), parameter :: specmw_so4_amode = 115.10733999999999_r8
 end module modal_aero_data
 
+
+module carma_intr
+  implicit none
+  public :: carma_get_group_by_name, carma_get_dry_radius
+contains
+  subroutine carma_get_group_by_name(short_name, igroup, rc)
+    character(len=*), intent(in) :: short_name
+    integer, intent(out) :: igroup
+    integer, intent(out) :: rc
+    igroup = 1
+    rc = 0
+  end subroutine carma_get_group_by_name
+  subroutine carma_get_dry_radius(state, igroup, ibin, dryr, rho, rc)
+    use physics_types, only: physics_state
+    use shr_kind_mod, only: r8 => shr_kind_r8
+    type(physics_state), intent(in) :: state
+    integer, intent(in) :: igroup
+    integer, intent(in) :: ibin
+    real(kind=r8), intent(out) :: dryr(:,:)
+    real(kind=r8), intent(out) :: rho(:,:)
+    integer, intent(out) :: rc
+    dryr(:,:) = 0.0_r8 ! m
+    rho(:,:) = 0.0_r8 ! kg m-3
+    rc = 0
+  end subroutine carma_get_dry_radius
+end module carma_intr
