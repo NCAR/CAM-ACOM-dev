@@ -105,16 +105,15 @@ module cloud_aqueous_chemistry
   logical :: cloud_borne = .false.
 
   ! Constants that should be moved to a common module
-  ! FUTURE_ANSWER_CHANGING_MODIFICATION - Use correct conversion factors and base SI units
   real(r8), parameter :: AVOGADRO = 6.02214076e23_r8 ! mol-1
   real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8 ! J K-1
   real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8 ! atm Pa-1
+  real(r8), parameter :: M3_TO_L = 1.0e3_r8 ! L m-3
   real(r8), parameter :: GAS_CONSTANT = BOLTZMANN*AVOGADRO ! J K-1 mol-1
-  real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314.0_r8*PASCAL_TO_ATM ! BOLTZMANN*AVOGADRO*1000.0_r8*PASCAL_TO_ATM
+  real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = BOLTZMANN*AVOGADRO*M3_TO_L*PASCAL_TO_ATM ! L atm K-1 mol-1
   real(r8), parameter :: GAS_CONSTANT_DRY_AIR_J_KG_K = 287.0_r8 ! J kg-1 K-1
-  real(r8), parameter :: SMALL_NUMBER = 1.e-30_r8 ! unitless
-  real(r8), parameter :: WATER_DISSOCIATION_CONSTANT = 1.e-14_r8 ! mol2/L2  [H+][OH-]
-  real(r8), parameter :: M3_TO_L = 1.e3_r8 ! L m-3
+  real(r8), parameter :: SMALL_NUMBER = 1.0e-30_r8 ! unitless
+  real(r8), parameter :: WATER_DISSOCIATION_CONSTANT = 1.0e-14_r8 ! mol2/L2  [H+][OH-]
 
 contains
 

@@ -15,10 +15,10 @@ module mo_setsox
   integer            ::  id_msa
 
   integer :: id_so2, id_nh3, id_hno3, id_h2o2, id_o3, id_ho2
-  integer :: id_so4, id_h2so4
+  integer :: id_so4, id_h2so4, id_co2
 
   logical :: has_sox = .true.
-  logical :: inv_so2, inv_nh3, inv_hno3, inv_h2o2, inv_ox, inv_nh4no3, inv_ho2
+  logical :: inv_so2, inv_nh3, inv_hno3, inv_h2o2, inv_ox, inv_nh4no3, inv_ho2, inv_co2
 
   logical :: cloud_borne = .false.
 
@@ -99,6 +99,12 @@ contains
        id_ho2 = get_inv_ndx( 'HO2' )
     else
        id_ho2 = get_spc_ndx( 'HO2' )
+    endif
+
+    id_co2 = get_inv_ndx( 'CO2' )
+    inv_co2 = id_co2 > 0
+    if ( .not. inv_co2 ) then
+       id_co2 = get_spc_ndx( 'CO2' )
     endif
 
     has_sox = (id_so2>0) .and. (id_h2o2>0) .and. (id_o3>0) .and. (id_ho2>0)
@@ -226,6 +232,7 @@ contains
     real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8          ! J K-1
     real(r8), parameter :: AVOGADRO = 6.02214076e23_r8          ! mol-1
     real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8 / 101325.0_r8 ! atm Pa-1
+    real(r8), parameter :: M3_TO_L = 1.0e3_r8                   ! L m-3
     real(r8), parameter :: const0 = 1.e3_r8/AVOGADRO
     real(r8), parameter :: xa0 = 11._r8
     real(r8), parameter :: xb0 = -.1_r8
@@ -240,7 +247,7 @@ contains
     real(r8), parameter :: kh1 = 2.05e-5_r8         ! HO2(a)          -> H+ + O2-
     real(r8), parameter :: kh2 = 8.6e5_r8           ! HO2(a) + ho2(a) -> h2o2(a) + o2
     real(r8), parameter :: kh3 = 1.e8_r8            ! HO2(a) + o2-    -> h2o2(a) + o2
-    real(r8), parameter :: Ra = 8314._r8 * PASCAL_TO_ATM ! universal constant   (atm)/(M-K)
+    real(r8), parameter :: Ra = BOLTZMANN * AVOGADRO * M3_TO_L * PASCAL_TO_ATM ! universal constant   (atm)/(M-K)
     real(r8), parameter :: xkw = 1.e-14_r8          ! water acidity
 
     !
@@ -269,7 +276,7 @@ contains
     real(r8) :: r2h2o2 ! prod(h2o2) by ho2 in mix/s
 
     real(r8), dimension(ncol,pver)  ::             &
-         xhno3, xh2o2, xso2, xso4, xno3, &
+         xhno3, xh2o2, xso2, xso4, xno3, xco2, &
          xnh3, xnh4, xo3,         &
          cfact, &
          xph, xho2,         &
@@ -364,6 +371,12 @@ contains
        else
           xho2 (:,k) = qin(:,k,id_ho2)                 ! mixing ratio
        endif
+
+      !  if ( inv_co2 ) then
+      !     xco2 (:,k) = invariants(:,k,id_co2)/xhnm(:,k) ! mixing ratio
+      !  else
+      !     xco2 (:,k) = qin(:,k,id_co2)                  ! mixing ratio
+      !  endif
 
        if (cloud_borne) then
           xh2so4(:,k) = qin(:,k,id_h2so4)
