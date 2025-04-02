@@ -510,10 +510,8 @@ contains
                                        * temperature(i,k) / midpoint_pressure(i,k)
 
           if( cloud_composition%xlwc(i,k) >= MINIMUM_CLOUD_LIQUID_WATER ) then
-             !-----------------------------------------------------------------
-             ! This should be divided by 101325, not 101300, but fixing this breaks the tests
-             ! FUTURE_ANSWER_CHANGING_MODIFICATION
-             patm = midpoint_pressure(i,k)/101300._r8
+
+             patm = midpoint_pressure(i,k) * PASCAL_TO_ATM ! atm
 
              !-----------------------------------------------------------------
              ! Update Henry's Law calculators with current conditions
@@ -659,9 +657,8 @@ contains
     !==============================================================
     ver_loop1: do k = 1,pver
        col_loop1: do i = 1,ncol
-          ! This should be dividing by 101325, not 101300, but changing it breaks the tests
-          ! FUTURE_ANSWER_CHANGING_MODIFICATION
-          patm = midpoint_pressure(i,k) / 101300._r8        ! press is in pascal
+
+          patm = midpoint_pressure(i,k) * PASCAL_TO_ATM ! atm
 
           ! Remove NH3/NH4 associated with NH4HSO4 in clouds
           if (cloud_borne .and. cloud_fraction(i,k)>0._r8) then

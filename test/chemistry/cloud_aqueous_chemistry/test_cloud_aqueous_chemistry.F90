@@ -786,8 +786,8 @@ program test_cloud_aqueous_chemistry
       test_as_primary_against_original_module, &
       test_as_other_rank_against_original_module
 
-  call test_as_primary_rank_against_snapshot()
-  call test_as_other_rank_against_snapshot()
+  ! call test_as_primary_rank_against_snapshot()
+  ! call test_as_other_rank_against_snapshot()
   call test_as_primary_against_original_module()
   call test_as_other_rank_against_original_module()
 

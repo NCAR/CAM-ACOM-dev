@@ -223,8 +223,9 @@ contains
     !-----------------------------------------------------------------------
     integer,  parameter :: itermax = 20
     real(r8), parameter :: ph0 = 5.0_r8  ! INITIAL PH VALUES
-    real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8   ! J K-1
-    real(r8), parameter :: AVOGADRO = 6.02214076e23_r8   ! mol-1
+    real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8          ! J K-1
+    real(r8), parameter :: AVOGADRO = 6.02214076e23_r8          ! mol-1
+    real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8 / 101325.0_r8 ! atm Pa-1
     real(r8), parameter :: const0 = 1.e3_r8/AVOGADRO
     real(r8), parameter :: xa0 = 11._r8
     real(r8), parameter :: xb0 = -.1_r8
@@ -239,7 +240,7 @@ contains
     real(r8), parameter :: kh1 = 2.05e-5_r8         ! HO2(a)          -> H+ + O2-
     real(r8), parameter :: kh2 = 8.6e5_r8           ! HO2(a) + ho2(a) -> h2o2(a) + o2
     real(r8), parameter :: kh3 = 1.e8_r8            ! HO2(a) + o2-    -> h2o2(a) + o2
-    real(r8), parameter :: Ra = 8314._r8/101325._r8 ! universal constant   (atm)/(M-K)
+    real(r8), parameter :: Ra = 8314._r8 * PASCAL_TO_ATM ! universal constant   (atm)/(M-K)
     real(r8), parameter :: xkw = 1.e-14_r8          ! water acidity
 
     !
@@ -248,7 +249,7 @@ contains
     integer  :: k, i, iter, file
     real(r8) :: wrk, delta
     real(r8) :: xph0, aden, xk, xe, x2
-    real(r8) :: tz, xl, px, qz, pz, es, qs, patm
+    real(r8) :: tz, xl, px, qz, es, qs, patm
     real(r8) :: Eso2, Eso4, Ehno3, Eco2, Eh2o, Enh3
     real(r8) :: so2g, h2o2g, co2g, o3g
     real(r8) :: hno3a, nh3a, so2a, h2o2a, co2a, o3a
@@ -403,10 +404,9 @@ contains
              !-----------------------------------------------------------------
 
              !-----------------------------------------------------------------
-             pz = .01_r8*press(i,k)       !! pressure in mb
              tz = tfld(i,k)
-             patm = pz/1013._r8
-             xam  = press(i,k)/(BOLTZMANN*tz)  !air density /M3
+             patm = press(i,k) * PASCAL_TO_ATM ! atm
+             xam  = press(i,k)/(BOLTZMANN*tz)  ! air density /M3
 
              !-----------------------------------------------------------------
              !        ... hno3
@@ -642,7 +642,7 @@ contains
 
           xl = cldconc%xlwc(i,k)
 
-          patm = press(i,k)/101300._r8        ! press is in pascal
+          patm = press(i,k) * PASCAL_TO_ATM   ! atm
           xam  = press(i,k)/(BOLTZMANN*tz)    ! air density /M3
 
           !-----------------------------------------------------------------------
