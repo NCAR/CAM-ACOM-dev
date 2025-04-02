@@ -824,9 +824,9 @@ contains
                    xso4(i,k)=xso4(i,k)+xso2(i,k)
                    if (cloud_borne) then
                       xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
-                      xso2(i,k)=1.e-20_r8
+                      xso2(i,k)=1.e-30_r8
                    else       ! ???? bug ????
-                      xso2(i,k)=1.e-20_r8
+                      xso2(i,k)=1.e-30_r8
                       xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
                    endif
                 else
@@ -839,7 +839,7 @@ contains
                 if (ccc  .gt. xh2o2(i,k)) then
                    xso4(i,k)=xso4(i,k)+xh2o2(i,k)
                    xso2(i,k)=xso2(i,k)-xh2o2(i,k)
-                   xh2o2(i,k)=1.e-20_r8
+                   xh2o2(i,k)=1.e-30_r8
                 else
                    xso4(i,k)  = xso4(i,k)  + ccc
                    xh2o2(i,k) = xh2o2(i,k) - ccc
@@ -868,7 +868,7 @@ contains
 
              if (ccc .gt. xso2(i,k)) then
                 xso4(i,k) = xso4(i,k) + xso2(i,k)
-                xso2(i,k) = 1.e-20_r8
+                xso2(i,k) = 1.e-30_r8
              else
                 xso4(i,k) = xso4(i,k) + ccc
                 xso2(i,k) = xso2(i,k) - ccc

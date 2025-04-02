@@ -734,7 +734,7 @@ contains
              delta_concentration = min(delta_concentration, min(xh2o2(i,k), xso2(i,k)))
              xso4(i,k)  = max(xso4(i,k)  + delta_concentration, SMALL_NUMBER)
              xh2o2(i,k) = max(xh2o2(i,k) - delta_concentration, SMALL_NUMBER)
-             xso2(i,k)  = max(xso2(i,k)  - delta_concentration, 1.0e-20_r8) ! FUTURE_ANSWER_CHANGING_MODIFICATION Use SMALL_NUMBER?
+             xso2(i,k)  = max(xso2(i,k)  - delta_concentration, SMALL_NUMBER)
              change_in_aq_so4_mixing_ratio(i,k) = delta_concentration
 #else
              xso4_init(i,k)=xso4(i,k)
@@ -744,10 +744,10 @@ contains
                    xso4(i,k)=xso4(i,k)+xso2(i,k)
                    if (cloud_borne) then
                       xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
-                      xso2(i,k)=1.e-20_r8 ! TODO: See if SMALL_NUMBER is more appropriate
+                      xso2(i,k)=SMALL_NUMBER
                    else       ! ???? bug ????
                       ! FUTURE_ANSWER_CHANGING_MODIFICATION - this appears to be incorrect
-                      xso2(i,k)=1.e-20_r8 ! TODO: See if SMALL_NUMBER is more appropriate
+                      xso2(i,k)=SMALL_NUMBER
                       xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
                    endif
                 else
@@ -760,7 +760,7 @@ contains
                 if (delta_concentration  .gt. xh2o2(i,k)) then
                    xso4(i,k)=xso4(i,k)+xh2o2(i,k)
                    xso2(i,k)=xso2(i,k)-xh2o2(i,k)
-                   xh2o2(i,k)=1.e-20_r8
+                   xh2o2(i,k)=SMALL_NUMBER
                 else
                    xso4(i,k)  = xso4(i,k)  + delta_concentration
                    xh2o2(i,k) = xh2o2(i,k) - delta_concentration
@@ -791,7 +791,7 @@ contains
              delta_concentration = min(delta_concentration, xso2(i,k))
              xso4_init(i,k) = xso4(i,k)
              xso4(i,k) = max(xso4(i,k) + delta_concentration, SMALL_NUMBER)
-             xso2(i,k) = max(xso2(i,k) - delta_concentration, 1.0e-20_r8) ! FUTURE_ANSWER_CHANGING_MODIFICATION Use SMALL_NUMBER?
+             xso2(i,k) = max(xso2(i,k) - delta_concentration, SMALL_NUMBER)
 
           END IF !! WHEN CLOUD IS PRESENTED
 
