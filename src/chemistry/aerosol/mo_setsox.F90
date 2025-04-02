@@ -223,8 +223,9 @@ contains
     !-----------------------------------------------------------------------
     integer,  parameter :: itermax = 20
     real(r8), parameter :: ph0 = 5.0_r8  ! INITIAL PH VALUES
-    real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8 ! J K-1
-    real(r8), parameter :: const0 = 1.e3_r8/6.023e23_r8
+    real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8   ! J K-1
+    real(r8), parameter :: AVOGADRO = 6.02214076e23_r8   ! mol-1
+    real(r8), parameter :: const0 = 1.e3_r8/AVOGADRO
     real(r8), parameter :: xa0 = 11._r8
     real(r8), parameter :: xb0 = -.1_r8
     real(r8), parameter :: xa1 = 1.053_r8

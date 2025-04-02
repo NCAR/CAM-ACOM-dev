@@ -106,7 +106,7 @@ module cloud_aqueous_chemistry
 
   ! Constants that should be moved to a common module
   ! FUTURE_ANSWER_CHANGING_MODIFICATION - Use correct conversion factors and base SI units
-  real(r8), parameter :: AVOGADRO = 6.023e23 ! 6.02214076e23_r8 ! mol-1
+  real(r8), parameter :: AVOGADRO = 6.02214076e23_r8 ! mol-1
   real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8 ! J K-1
   real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8 ! atm Pa-1
   real(r8), parameter :: GAS_CONSTANT = BOLTZMANN*AVOGADRO ! J K-1 mol-1
