@@ -98,7 +98,6 @@ module cloud_aqueous_chemistry
     module procedure :: henrys_law_constructor
   end interface henrys_law_t
     
-  ! FUTURE_ANSWER_CHANGING_MODIFICATION - This will lead to the actual CO2 value being used, if available
   type(cloud_species_t) :: so2, nh3, hno3, h2o2, o3, ho2, msa, so4, h2so4, co2
 
   ! TODO: Figure out what this flag is for
@@ -148,12 +147,10 @@ contains
     msa   = cloud_species_t( 'MSA'   )
     so4   = cloud_species_t( 'SO4'   )
     h2so4 = cloud_species_t( 'H2SO4' )
-    ! This will use the CO2 from the model state if available, unlike the original hard-coded value
-    ! FUTURE_ANSWER_CHANGING_MODIFICATION - Disable cloud chemistry when CO2 is not available, remove default value
-    co2   = cloud_species_t( 'CO2',  default_mixing_ratio=330.0e-6_r8 )
+    co2   = cloud_species_t( 'CO2'   )
 
     do_cloud_aqueous_chemistry = so2%exists() .and. h2o2%exists() .and. &
-                                 o3%exists() .and. ho2%exists()
+                                 o3%exists() .and. ho2%exists() .and. co2%exists()
     if (do_cloud_aqueous_chemistry) then
       if (cloud_borne) then
         if (.not. h2so4%exists()) then
@@ -859,7 +856,8 @@ contains
    
       class(cloud_species_t), intent(in) :: this
    
-      cloud_species_exists = this%state_index_ .ne. CLOUD_INDEX_UNDEFINED
+      cloud_species_exists = (this%state_index_ .ne. CLOUD_INDEX_UNDEFINED) &
+                             .or. (this%default_mixing_ratio_ > 0.0_r8)
    
    end function cloud_species_exists
 

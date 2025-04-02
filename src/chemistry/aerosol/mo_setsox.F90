@@ -107,7 +107,8 @@ contains
        id_co2 = get_spc_ndx( 'CO2' )
     endif
 
-    has_sox = (id_so2>0) .and. (id_h2o2>0) .and. (id_o3>0) .and. (id_ho2>0)
+    has_sox = (id_so2>0) .and. (id_h2o2>0) .and. (id_o3>0) .and. (id_ho2>0) &
+              .and. (id_co2>0)
     if (cloud_borne) then
        has_sox = has_sox .and. (id_h2so4>0)
     else
