@@ -833,18 +833,11 @@ contains
                   / const0      &                                ! [/L(a)/s]
                   / xhnm(i,k)                                    ! [mixing ratio/s]
 
-             ccc = pso4*dtime
-             ccc = max(ccc, SMALL_NUMBER)
-
-             xso4_init(i,k)=xso4(i,k)
-
-             if (ccc .gt. xso2(i,k)) then
-                xso4(i,k) = xso4(i,k) + xso2(i,k)
-                xso2(i,k) = SMALL_NUMBER
-             else
-                xso4(i,k) = xso4(i,k) + ccc
-                xso2(i,k) = xso2(i,k) - ccc
-             end if
+             ! estimate the net production of so4, without exceeding reactant concentrations
+             xso4_init(i,k) = xso4(i,k)
+             ccc            = max(min(pso4*dtime, xso2(i,k)), SMALL_NUMBER)
+             xso4(i,k)      = xso4(i,k) + ccc
+             xso2(i,k)      = max(xso2(i,k) - ccc, SMALL_NUMBER)
 
           END IF !! WHEN CLOUD IS PRESENTED
 

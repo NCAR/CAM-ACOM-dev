@@ -754,7 +754,7 @@ contains
              delta_concentration = max(dso4_dt*time_step, SMALL_NUMBER)
              delta_concentration = min(delta_concentration, xso2(i,k))
              xso4_init(i,k) = xso4(i,k)
-             xso4(i,k) = max(xso4(i,k) + delta_concentration, SMALL_NUMBER)
+             xso4(i,k) = xso4(i,k) + delta_concentration
              xso2(i,k) = max(xso2(i,k) - delta_concentration, SMALL_NUMBER)
 
           END IF !! WHEN CLOUD IS PRESENTED
