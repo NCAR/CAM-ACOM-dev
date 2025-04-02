@@ -21,6 +21,7 @@ module test_cloud_aqueous_chemistry_mod
   integer, parameter :: n_invariants = 7
   integer, parameter :: n_species = 26
   integer, parameter :: n_modes = 4
+  integer, parameter :: CO2_SPECIES_INDEX = 4 ! Added CO2; not in snapshots
 
   character(len=*), parameter :: data_file = &
       '../test/chemistry/data/QPC6-f10_f10_mg37.cam.h1i.0001-01-05-00000.nc'
@@ -334,13 +335,14 @@ contains
     ! Modify to include randomly generated data for species not included in the
     ! configuration used to generate the snapshot file.
     do i = 1, size(chem_args)
-      do j = 1, size(chem_args(i)%qin, dim=2)
-        do k = 1, size(chem_args(i)%qin, dim=3)
+      do j = 1, size(chem_args(i)%qin, dim=1)
+        do k = 1, size(chem_args(i)%qin, dim=2)
           chem_args(i)%qin(j,k,1) = 25.0e-9_r8 + 1.0e-10_r8 * (i + j + k) ! NH3 ~ 25 ppb
           chem_args(i)%qin(j,k,2) = 10.0e-9_r8 + 1.0e-10_r8 * (i + j + k) ! HNO3 ~ 10 ppb
           chem_args(i)%qin(j,k,3) = 5.0e-10_r8 + 1.0e-11_r8 * (i + j + k) ! MSA ~ 0.5 ppb
         end do
       end do
+      chem_args(i)%qin(:,:,CO2_SPECIES_INDEX) = 330.0e-6_r8 ! CO2 = 330 ppm
     end do
     do i = 1, size(chem_args)
       chem_args(i)%xphlwc = -1.0e300_r8

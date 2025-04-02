@@ -13,6 +13,7 @@ module test_cloud_aqueous_chemistry_mod
   integer, parameter :: n_invariants = 7
   integer, parameter :: n_species = 26
   integer, parameter :: n_modes = 4
+  integer, parameter :: CO2_SPECIES_INDEX = 4 ! Added CO2; not in snapshots
 
   character(len=*), parameter :: data_file = &
       '../test/chemistry/data/QPC6-f10_f10_mg37.cam.h1i.0001-01-05-00000.nc'
@@ -336,7 +337,7 @@ contains
     type(chemistry_args), allocatable :: chem_args(:)
     type(file_io_t), pointer :: file
 
-    integer :: i, j, i_time, i_lat, i_lon
+    integer :: i, j, k, i_time, i_lat, i_lon
     character(len=10) :: index_string
     real(r8), allocatable :: temp1d(:), temp2d(:,:), lats(:), lons(:)
 
@@ -430,6 +431,9 @@ contains
         chem_args(i)%qin(:,:,j) = temp2d((i-1)*n_columns_per_rank+1 &
                             : min(i*n_columns_per_rank,size(temp2d, dim=1)),:)
       end do
+    end do
+    do i = 1, size(chem_args)
+      chem_args(i)%qin(:,:,CO2_SPECIES_INDEX) = 330.0e-6_r8 ! CO2 = 330 ppm
     end do
     do i = 1, size(chem_args)
       chem_args(i)%xphlwc = -1.0e300_r8

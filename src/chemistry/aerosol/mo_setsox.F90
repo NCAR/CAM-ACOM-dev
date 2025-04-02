@@ -258,7 +258,7 @@ contains
     real(r8) :: xph0, aden, xk, xe, x2
     real(r8) :: tz, xl, px, qz, es, qs, patm
     real(r8) :: Eso2, Eso4, Ehno3, Eco2, Eh2o, Enh3
-    real(r8) :: so2g, h2o2g, co2g, o3g
+    real(r8) :: so2g, h2o2g, o3g
     real(r8) :: hno3a, nh3a, so2a, h2o2a, co2a, o3a
     real(r8) :: rah2o2, rao3, pso4, ccc
     real(r8) :: cnh3, chno3, com, com1, com2, xra
@@ -372,11 +372,11 @@ contains
           xho2 (:,k) = qin(:,k,id_ho2)                 ! mixing ratio
        endif
 
-      !  if ( inv_co2 ) then
-      !     xco2 (:,k) = invariants(:,k,id_co2)/xhnm(:,k) ! mixing ratio
-      !  else
-      !     xco2 (:,k) = qin(:,k,id_co2)                  ! mixing ratio
-      !  endif
+       if ( inv_co2 ) then
+          xco2 (:,k) = invariants(:,k,id_co2)/xhnm(:,k) ! mixing ratio
+       else
+          xco2 (:,k) = qin(:,k,id_co2)                  ! mixing ratio
+       endif
 
        if (cloud_borne) then
           xh2so4(:,k) = qin(:,k,id_h2so4)
@@ -501,10 +501,9 @@ contains
              !-----------------------------------------------------------------
              !        ... co2 effects
              !-----------------------------------------------------------------
-             co2g = 330.e-6_r8                            !330 ppm = 330.e-6 atm
              xk = 3.1e-2_r8*EXP( 2423._r8*work1(i) )
              xe = 4.3e-7_r8*EXP(-913._r8 *work1(i) )
-             Eco2 = xk*xe*co2g  *patm
+             Eco2 = xk*xe*xco2(i,k)*patm
 
              !-----------------------------------------------------------------
              !         ... so4 effect

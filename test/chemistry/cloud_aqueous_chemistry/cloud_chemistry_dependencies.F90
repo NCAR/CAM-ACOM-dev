@@ -57,6 +57,8 @@ contains
       get_spc_ndx = 0
     case ('H2SO4')
       get_spc_ndx = 8
+   case('CO2')
+     get_spc_ndx = 4 ! Added CO2; not in snapshots
     case default
       get_spc_ndx = -1
     end select
