@@ -234,6 +234,7 @@ contains
     real(r8), parameter :: AVOGADRO = 6.02214076e23_r8          ! mol-1
     real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8 / 101325.0_r8 ! atm Pa-1
     real(r8), parameter :: M3_TO_L = 1.0e3_r8                   ! L m-3
+    real(r8), parameter :: SMALL_NUMBER = 1.0e-30_r8
     real(r8), parameter :: const0 = 1.e3_r8/AVOGADRO
     real(r8), parameter :: xa0 = 11._r8
     real(r8), parameter :: xb0 = -.1_r8
@@ -815,10 +816,10 @@ contains
 
              ! estimate the net production of so4, without exceeding reactant concentrations
              xso4_init(i,k) = xso4(i,k)
-             ccc            = max(min(pso4*dtime, min(xh2o2(i,k), xso2(i,k))), 1.0e-30_r8)
+             ccc            = max(min(pso4*dtime, min(xh2o2(i,k), xso2(i,k))), SMALL_NUMBER)
              xso4(i,k)      = xso4(i,k) + ccc
-             xh2o2(i,k)     = max(xh2o2(i,k) - ccc, 1.0e-30_r8)
-             xso2(i,k)      = max(xso2(i,k)  - ccc, 1.0e-30_r8)
+             xh2o2(i,k)     = max(xh2o2(i,k) - ccc, SMALL_NUMBER)
+             xso2(i,k)      = max(xso2(i,k)  - ccc, SMALL_NUMBER)
              xdelso4hp(i,k) = ccc
 
              !...........................
@@ -833,13 +834,13 @@ contains
                   / xhnm(i,k)                                    ! [mixing ratio/s]
 
              ccc = pso4*dtime
-             ccc = max(ccc, 1.e-30_r8)
+             ccc = max(ccc, SMALL_NUMBER)
 
              xso4_init(i,k)=xso4(i,k)
 
              if (ccc .gt. xso2(i,k)) then
                 xso4(i,k) = xso4(i,k) + xso2(i,k)
-                xso2(i,k) = 1.e-30_r8
+                xso2(i,k) = SMALL_NUMBER
              else
                 xso4(i,k) = xso4(i,k) + ccc
                 xso2(i,k) = xso2(i,k) - ccc
