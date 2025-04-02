@@ -813,43 +813,14 @@ contains
                   / const0 & ! [/L(a)/s]
                   / xhnm(i,k)
 
+             ! estimate the net production of so4, without exceeding reactant concentrations
+             xso4_init(i,k) = xso4(i,k)
+             ccc            = max(min(pso4*dtime, min(xh2o2(i,k), xso2(i,k))), 1.0e-30_r8)
+             xso4(i,k)      = xso4(i,k) + ccc
+             xh2o2(i,k)     = max(xh2o2(i,k) - ccc, 1.0e-30_r8)
+             xso2(i,k)      = max(xso2(i,k)  - ccc, 1.0e-30_r8)
+             xdelso4hp(i,k) = ccc
 
-             ccc = pso4*dtime
-             ccc = max(ccc, 1.e-30_r8)
-
-             xso4_init(i,k)=xso4(i,k)
-
-             IF (xh2o2(i,k) .gt. xso2(i,k)) THEN
-                if (ccc .gt. xso2(i,k)) then
-                   xso4(i,k)=xso4(i,k)+xso2(i,k)
-                   if (cloud_borne) then
-                      xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
-                      xso2(i,k)=1.e-30_r8
-                   else       ! ???? bug ????
-                      xso2(i,k)=1.e-30_r8
-                      xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
-                   endif
-                else
-                   xso4(i,k)  = xso4(i,k)  + ccc
-                   xh2o2(i,k) = xh2o2(i,k) - ccc
-                   xso2(i,k)  = xso2(i,k)  - ccc
-                end if
-
-             ELSE
-                if (ccc  .gt. xh2o2(i,k)) then
-                   xso4(i,k)=xso4(i,k)+xh2o2(i,k)
-                   xso2(i,k)=xso2(i,k)-xh2o2(i,k)
-                   xh2o2(i,k)=1.e-30_r8
-                else
-                   xso4(i,k)  = xso4(i,k)  + ccc
-                   xh2o2(i,k) = xh2o2(i,k) - ccc
-                   xso2(i,k)  = xso2(i,k)  - ccc
-                end if
-             END IF
-
-             if (cloud_borne) then
-                xdelso4hp(i,k)  =  xso4(i,k) - xso4_init(i,k)
-             endif
              !...........................
              !       S(IV) + O3 = S(VI)
              !...........................

@@ -727,49 +727,13 @@ contains
                 dso4_dt = k_siv_h2o2 * Heff_h2o2(i,k) * h2o2g * Heff_so2(i,k) * so2g &
                           * molar_to_mixing_ratio(i,k)    ! [mol mol-1 s-1]
              endif
-             delta_concentration = max(dso4_dt*time_step, SMALL_NUMBER)
-
-! FUTURE_ANSWER_CHANGING_MODIFICATION - simplify and use consistent logic
-#if 0
-             delta_concentration = min(delta_concentration, min(xh2o2(i,k), xso2(i,k)))
-             xso4(i,k)  = max(xso4(i,k)  + delta_concentration, SMALL_NUMBER)
-             xh2o2(i,k) = max(xh2o2(i,k) - delta_concentration, SMALL_NUMBER)
-             xso2(i,k)  = max(xso2(i,k)  - delta_concentration, SMALL_NUMBER)
+             xso4_init(i,k)      = xso4(i,k)
+             delta_concentration = max(min(dso4_dt*time_step, min(xh2o2(i,k), xso2(i,k))), SMALL_NUMBER)
+             xso4(i,k)           = xso4(i,k)  + delta_concentration
+             xh2o2(i,k)          = max(xh2o2(i,k) - delta_concentration, SMALL_NUMBER)
+             xso2(i,k)           = max(xso2(i,k)  - delta_concentration, SMALL_NUMBER)
              change_in_aq_so4_mixing_ratio(i,k) = delta_concentration
-#else
-             xso4_init(i,k)=xso4(i,k)
 
-             IF (xh2o2(i,k) .gt. xso2(i,k)) THEN
-                if (delta_concentration .gt. xso2(i,k)) then
-                   xso4(i,k)=xso4(i,k)+xso2(i,k)
-                   if (cloud_borne) then
-                      xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
-                      xso2(i,k)=SMALL_NUMBER
-                   else       ! ???? bug ????
-                      ! FUTURE_ANSWER_CHANGING_MODIFICATION - this appears to be incorrect
-                      xso2(i,k)=SMALL_NUMBER
-                      xh2o2(i,k)=xh2o2(i,k)-xso2(i,k)
-                   endif
-                else
-                   xso4(i,k)  = xso4(i,k)  + delta_concentration
-                   xh2o2(i,k) = xh2o2(i,k) - delta_concentration
-                   xso2(i,k)  = xso2(i,k)  - delta_concentration
-                end if
-
-             ELSE
-                if (delta_concentration  .gt. xh2o2(i,k)) then
-                   xso4(i,k)=xso4(i,k)+xh2o2(i,k)
-                   xso2(i,k)=xso2(i,k)-xh2o2(i,k)
-                   xh2o2(i,k)=SMALL_NUMBER
-                else
-                   xso4(i,k)  = xso4(i,k)  + delta_concentration
-                   xh2o2(i,k) = xh2o2(i,k) - delta_concentration
-                   xso2(i,k)  = xso2(i,k)  - delta_concentration
-                end if
-             END IF
-
-             change_in_aq_so4_mixing_ratio(i,k)  =  xso4(i,k) - xso4_init(i,k)
-#endif
              !------------------------------------------------------------------------
              !       S(IV) + O3 = S(VI)
              ! (https://acp.copernicus.org/articles/24/1467/2024/acp-24-1467-2024.pdf)
