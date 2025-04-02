@@ -698,10 +698,7 @@ contains
              ! (https://acp.copernicus.org/articles/24/1467/2024/acp-24-1467-2024.pdf)
              !------------------------------------------------------------------------
              ! FUTURE_ANSWER_CHANGING_MODIFICATION
-             ! It is unclear why different logic is used here for cloud_borne/not cloud_borne
-             ! Specifically, there is no explanation for why pressure should be 1.0 atm in the
-             ! non-cloud-borne case, but the actual pressure should be used in the cloud-borne case.
-             ! Also, in the rate calculations, the cloud-borne logic seems more consistent
+             ! In the rate calculations, the cloud-borne logic seems more consistent
              ! with the description in the reference, where the [SO2](aq) and [H2O2](aq)
              ! are calculated using the actual Henry's Law constants (not effective HLC) and
              ! the gas-phase mixing ratios, because the gas-phase concentrations were already
@@ -722,10 +719,11 @@ contains
                 ! NOTE: uses,
                 !    [H2O2](aq) = [H2O2](aq) + [HO2-](aq)
                 !    [SO2](aq)  = [SO2](aq) + [HSO3-](aq) + [SO3--](aq)
-                ! For some reason, assumes a pressure of 1 atm
                 call hl_h2o2%effective_henrys_law_constant( i, k, h_plus_conc(i,k), Heff_h2o2(i,k) )
-                dso4_dt = k_siv_h2o2 * Heff_h2o2(i,k) * h2o2g * Heff_so2(i,k) * so2g &
-                          * molar_to_mixing_ratio(i,k)    ! [mol mol-1 s-1]
+                dso4_dt = k_siv_h2o2 &
+                          * Heff_h2o2(i,k) * h2o2g * patm & ! [H2O2](aq) + [HO2-](aq)
+                          * Heff_so2(i,k)  * so2g  * patm & ! [SO2](aq) + [HSO3-](aq) + [SO3--](aq)
+                          * molar_to_mixing_ratio(i,k)      ! [mol mol-1 s-1]
              endif
              xso4_init(i,k)      = xso4(i,k)
              delta_concentration = max(min(dso4_dt*time_step, min(xh2o2(i,k), xso2(i,k))), SMALL_NUMBER)
@@ -743,14 +741,12 @@ contains
              !   [O3](aq)  = [O3](aq)
              ! FUTURE_ANSWER_CHANGING_MODIFICATION
              !    see if we should use [SO2](aq) here instead
-             !    also, unclear why a pressure of 1 atm is used for non-cloud-borne case
              k_siv_o3   = 4.39e11_r8 * EXP(-4131._r8/temperature(i,k))  &
                           + 2.56e3_r8  * EXP(-996._r8 /temperature(i,k)) / h_plus_conc(i,k)
-             if (cloud_borne) then
-               dso4_dt = k_siv_o3 * o3_aq * Heff_so2(i,k)*so2g*patm * molar_to_mixing_ratio(i,k) ! [mol mol-1 s-1]
-             else
-               dso4_dt = k_siv_o3 * o3_aq * Heff_so2(i,k)*so2g * molar_to_mixing_ratio(i,k)      ! [mol mol-1 s-1]
-             endif
+             dso4_dt = k_siv_o3 &
+                       * o3_aq &                       ! [O3](aq)
+                       * Heff_so2(i,k) * so2g * patm & ! [SO2](aq) + [HSO3-](aq) + [SO3--](aq)
+                       * molar_to_mixing_ratio(i,k)    ! [mol mol-1 s-1]
              delta_concentration = max(dso4_dt*time_step, SMALL_NUMBER)
              delta_concentration = min(delta_concentration, xso2(i,k))
              xso4_init(i,k) = xso4(i,k)

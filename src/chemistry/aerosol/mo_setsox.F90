@@ -289,8 +289,6 @@ contains
          henh3,  &            ! henry law const for nh3
          heo3              !!,   &            ! henry law const for o3
 
-    real(r8) :: patm_x
-
     real(r8), dimension(ncol)  :: work1
     logical :: converged
 
@@ -794,18 +792,12 @@ contains
           IF (XL .ge. 1.e-8_r8) THEN    !! WHEN CLOUD IS PRESENTED
 
              if (cloud_borne) then
-                patm_x = patm
-             else
-                patm_x = 1._r8
-             endif
 
-             if (cloud_borne) then
-
-                pso4 = rah2o2 * 7.4e4_r8*EXP(6621._r8*work1(i)) * h2o2g * patm_x &
-                     * 1.23_r8 *EXP(3120._r8*work1(i)) * so2g * patm_x
+                pso4 = rah2o2 * 7.4e4_r8*EXP(6621._r8*work1(i)) * h2o2g * patm &
+                     * 1.23_r8 *EXP(3120._r8*work1(i)) * so2g * patm
              else
-                pso4 = rah2o2 * heh2o2(i,k) * h2o2g * patm_x  &
-                     * heso2(i,k)  * so2g  * patm_x    ! [M/s]
+                pso4 = rah2o2 * heh2o2(i,k) * h2o2g * patm  &
+                     * heso2(i,k)  * so2g  * patm    ! [M/s]
 
              endif
 
@@ -826,7 +818,7 @@ contains
              !       S(IV) + O3 = S(VI)
              !...........................
 
-             pso4 = rao3 * heo3(i,k)*o3g*patm_x * heso2(i,k)*so2g*patm_x  ! [M/s]
+             pso4 = rao3 * heo3(i,k)*o3g*patm * heso2(i,k)*so2g*patm  ! [M/s]
 
              pso4 = pso4        &                                ! [M/s] =  [mole/L(w)/s]
                   * xl          &                                ! [mole/L(a)/s]
