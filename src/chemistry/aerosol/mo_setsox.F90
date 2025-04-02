@@ -223,6 +223,7 @@ contains
     !-----------------------------------------------------------------------
     integer,  parameter :: itermax = 20
     real(r8), parameter :: ph0 = 5.0_r8  ! INITIAL PH VALUES
+    real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8 ! J K-1
     real(r8), parameter :: const0 = 1.e3_r8/6.023e23_r8
     real(r8), parameter :: xa0 = 11._r8
     real(r8), parameter :: xb0 = -.1_r8
@@ -311,7 +312,7 @@ contains
     do k = 1,pver
        cfact(:,k) = xhnm(:,k)     &          ! /cm3(a)
             * 1.e6_r8             &          ! /m3(a)
-            * 1.38e-23_r8/287._r8 &          ! Kg(a)/m3(a)
+            * BOLTZMANN/287._r8 &            ! Kg(a)/m3(a)
             * 1.e-3_r8                       ! Kg(a)/L(a)
     end do
 
@@ -404,7 +405,7 @@ contains
              pz = .01_r8*press(i,k)       !! pressure in mb
              tz = tfld(i,k)
              patm = pz/1013._r8
-             xam  = press(i,k)/(1.38e-23_r8*tz)  !air density /M3
+             xam  = press(i,k)/(BOLTZMANN*tz)  !air density /M3
 
              !-----------------------------------------------------------------
              !        ... hno3
@@ -641,7 +642,7 @@ contains
           xl = cldconc%xlwc(i,k)
 
           patm = press(i,k)/101300._r8        ! press is in pascal
-          xam  = press(i,k)/(1.38e-23_r8*tz)  ! air density /M3
+          xam  = press(i,k)/(BOLTZMANN*tz)    ! air density /M3
 
           !-----------------------------------------------------------------------
           !        ... hno3

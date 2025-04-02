@@ -107,14 +107,14 @@ module cloud_aqueous_chemistry
   ! Constants that should be moved to a common module
   ! FUTURE_ANSWER_CHANGING_MODIFICATION - Use correct conversion factors and base SI units
   real(r8), parameter :: AVOGADRO = 6.023e23 ! 6.02214076e23_r8 ! mol-1
-  real(r8), parameter :: BOLTZMANN = 1.38e-23_r8 ! 1.380649e-23_r8 ! J K-1
-  real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8
+  real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8 ! J K-1
+  real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8 ! atm Pa-1
   real(r8), parameter :: GAS_CONSTANT = BOLTZMANN*AVOGADRO ! J K-1 mol-1
   real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314.0_r8*PASCAL_TO_ATM ! BOLTZMANN*AVOGADRO*1000.0_r8*PASCAL_TO_ATM
   real(r8), parameter :: GAS_CONSTANT_DRY_AIR_J_KG_K = 287.0_r8 ! J kg-1 K-1
   real(r8), parameter :: SMALL_NUMBER = 1.e-30_r8 ! unitless
   real(r8), parameter :: WATER_DISSOCIATION_CONSTANT = 1.e-14_r8 ! mol2/L2  [H+][OH-]
-  real(r8), parameter :: L_TO_M3 = 1.e3_r8 ! m3 L-1
+  real(r8), parameter :: M3_TO_L = 1.e3_r8 ! L m-3
 
 contains
 
@@ -506,7 +506,7 @@ contains
           endif
 
           molar_to_mixing_ratio(i,k) = cloud_water(i,k) &
-                                       * L_TO_M3 * GAS_CONSTANT &
+                                       * M3_TO_L * GAS_CONSTANT &
                                        * temperature(i,k) / midpoint_pressure(i,k)
 
           if( cloud_composition%xlwc(i,k) >= MINIMUM_CLOUD_LIQUID_WATER ) then
