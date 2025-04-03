@@ -22,6 +22,9 @@ module mo_setsox
 
   logical :: cloud_borne = .false.
 
+  ! Inidices for species in the shared array of Henry's Law constant parameters
+  integer :: heff_id_hno3
+
 contains
 
 !-----------------------------------------------------------------------
@@ -119,6 +122,12 @@ contains
        write(iulog,*) 'sox_inti: has_sox = ',has_sox
     endif
 
+    ! Lookup Effective Henry's Law Constant parameters from the common
+    ! data file read in the shared code.
+    heff_id_hno3 = get_heff_index( 'HNO3' )
+
+    has_sox = has_sox .and. (heff_id_hno3 > 0)
+
     if( has_sox ) then
        if (masterproc) then
           write(iulog,*) '-----------------------------------------'
@@ -190,6 +199,7 @@ contains
     use mo_constants, only : pi
     use sox_cldaero_mod, only : sox_cldaero_update, sox_cldaero_create_obj, sox_cldaero_destroy_obj
     use cldaero_mod,     only : cldaero_conc_t
+    use shr_drydep_mod,  only : dheff
 
     !
     !-----------------------------------------------------------------------
@@ -441,8 +451,8 @@ contains
              !          = xk*xe*patm*xhno3/(1 + xk*ra*tz*xl*(1 + xe/hplus)
              !          = ( fact1_hno3    )/(1 + fact2_hno3 *(1 + fact3_hno3/hplus)
              !    [hno3-] = ehno3/hplus
-             xk = 2.1e5_r8 *EXP( 8700._r8*work1(i) )
-             xe = 15.4_r8
+             xk = dheff(1,heff_id_hno3) * exp( dheff(2,heff_id_hno3) * work1(i) )
+             xe = dheff(3,heff_id_hno3) * exp( dheff(4,heff_id_hno3) * work1(i) )
              fact1_hno3 = xk*xe*patm*xhno3(i,k)
              fact2_hno3 = xk*ra*tz*xl
              fact3_hno3 = xe
@@ -856,5 +866,20 @@ contains
     call sox_cldaero_destroy_obj(cldconc)
 
   end subroutine setsox
+
+   !-----------------------------------------------------------------
+   !       ... looks up Effective Henry's Law Constant parameters
+   !-----------------------------------------------------------------
+   pure elemental integer function get_heff_index(species_name) result(index)
+      use shr_drydep_mod, only: species_name_table, dheff
+     
+      character(len=*), intent(in) :: species_name
+
+      do index = 1, size(species_name_table)
+         if (trim(adjustl(species_name)) == &
+             trim(adjustl(species_name_table(index)))) return
+      end do
+      index = -1
+   end function get_heff_index
 
 end module mo_setsox

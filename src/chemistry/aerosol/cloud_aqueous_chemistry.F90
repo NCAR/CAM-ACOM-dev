@@ -365,11 +365,18 @@ contains
     ! but doesn't seem to include equations in the text:
     !   "These models and the Carslaw et al. review should be consulted for plots/predictions
     !    of H* for HNO3 and HCl in strong acid solutions over the atmospheric temperature range."
+    !
+    ! NOTE: Updated to use CESM NetCDF file for HNO3 Henry's Law constant parameters
     hl_hno3 = henrys_law_t( ncol, pver )
     hl_hno3%type_ = HENRYS_LAW_MONOPROTIC_ACID
-    hl_hno3%partitioning_factor_%A_ = 2.1e5_r8      ! mol m-3 Pa-1 * 100 OR mol L-1 atm-1 ?
+    ! original:
+    !hl_hno3%partitioning_factor_%A_ = 2.1e5_r8      ! mol m-3 Pa-1 * 100 OR mol L-1 atm-1 ?
+    !hl_hno3%partitioning_factor_%B_ = 8700.0_r8     ! K
+    !hl_hno3%first_dissociation_factor_%A_ = 15.4_r8 ! M NOTE: This is 15.0 in Yao et al. (2006)
+    !hl_hno3%first_dissociation_factor_%B_ = 0.0_r8  ! K
+    hl_hno3%partitioning_factor_%A_ = 2.1e5_r8      ! mol L-1 atm-1
     hl_hno3%partitioning_factor_%B_ = 8700.0_r8     ! K
-    hl_hno3%first_dissociation_factor_%A_ = 15.4_r8 ! M NOTE: This is 15.0 in Yao et al. (2006)
+    hl_hno3%first_dissociation_factor_%A_ = 22.0_r8 ! M
     hl_hno3%first_dissociation_factor_%B_ = 0.0_r8  ! K
 
     ! SO2 partitioning parameters

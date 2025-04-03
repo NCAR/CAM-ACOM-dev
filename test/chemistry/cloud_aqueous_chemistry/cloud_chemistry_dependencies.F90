@@ -13,6 +13,25 @@ module shr_kind_mod
   integer, parameter :: shr_kind_r8 = kind(0.0d0)
 end module shr_kind_mod
 
+module shr_drydep_mod
+  use shr_kind_mod, only : r8 => shr_kind_r8
+  implicit none
+  private
+  public :: n_species_table, species_name_table, dheff
+  integer, parameter :: n_species_table = 4
+  character(len=16), parameter :: species_name_table(*) = (/ &
+    'SO2             ', &
+    'HNO3            ', &
+    'SO4             ', &
+    'H2SO4           ' /)
+  real(kind=r8), parameter :: dheff(6,n_species_table) = reshape( &
+    [   0.0_r8,    0.0_r8,  0.0_r8, 0.0_r8, 0.0_r8, 0.0_r8, &
+      2.1e5_r8, 8700.0_r8, 22.0_r8, 0.0_r8, 0.0_r8, 0.0_r8, & ! HNO3
+        0.0_r8,    0.0_r8,  0.0_r8, 0.0_r8, 0.0_r8, 0.0_r8, &
+        0.0_r8,    0.0_r8,  0.0_r8, 0.0_r8, 0.0_r8, 0.0_r8 ], &
+    [6, n_species_table])
+end module shr_drydep_mod
+
 module spmd_utils
   implicit none
   public :: masterproc
