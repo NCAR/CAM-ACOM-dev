@@ -1,14 +1,14 @@
 !----------------------------------------------------------------------------------
-! CARMA implementation
+! CARMA implementation of cloud chemistry
 !----------------------------------------------------------------------------------
-module sox_cldaero_mod
+module carma_clouds
 
   use physics_buffer,  only : physics_buffer_desc, pbuf_get_index, dtype_r8
   use shr_kind_mod,    only : r8 => shr_kind_r8
   use cam_abortutils,  only : endrun
   use ppgrid,          only : pcols, pver
   use mo_chem_utls,    only : get_spc_ndx
-  use cldaero_mod,     only : cldaero_conc_t, cldaero_allocate, cldaero_deallocate
+  use cloud_utilities, only : cldaero_conc_t, cldaero_allocate, cldaero_deallocate, cldaero_uptakerate
   use cam_logfile,     only : iulog
   !st use modal_aero_data, only : ntot_amode, modeptr_accum, lptr_so4_cw_amode, lptr_msa_cw_amode
   !st use modal_aero_data, only : numptrcw_amode, lptr_nh4_cw_amode
@@ -16,10 +16,9 @@ module sox_cldaero_mod
   use chem_mods,       only : adv_mass
   use physconst,       only : gravit
   use phys_control,    only : phys_getopts
-  use cldaero_mod,     only : cldaero_uptakerate
   use chem_mods,       only : gas_pcnst
   use rad_constituents, only: rad_cnst_get_info, rad_cnst_get_info_by_bin, rad_cnst_get_bin_props_by_idx
-use spmd_utils,     only: masterproc
+  use spmd_utils,      only: masterproc
 
   implicit none
   private
@@ -41,6 +40,8 @@ use spmd_utils,     only: masterproc
   ! local indexing for bins
   integer, allocatable :: bin_idx(:,:) ! table for local indexing of modal aero number and mmr
   integer :: ncnst_tot                  ! total number of mode number conc + mode species
+
+  integer, parameter, public :: carma_id = 2
 
 contains
 
@@ -527,4 +528,5 @@ contains
 
   end subroutine sox_cldaero_destroy_obj
 
-end module sox_cldaero_mod
+end module carma_clouds
+

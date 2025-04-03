@@ -198,12 +198,6 @@ module carma_intr
   real(kind=f)          :: step_nsubstep     = 0._f
   real(kind=f)          :: step_nretry       = 0._f
 
-  ! Scaling factors used to conserve the mass of the condensing gases in groups
-  ! with core masses. This is for use after advection where errors in
-  ! tracer/tracer relationships can introduce negative values for the condensing
-  ! elements.
-  real (r8)             :: carma_massscalefactor(NGROUP, NBIN)
-
 contains
 
 
@@ -1494,7 +1488,9 @@ contains
         if (rc < 0) call endrun('carma_timestep_tend::CARMASTATE_Get failed.')
 
         spdiags(icol, :, SPDIAGS_NSTEP) = zsubsteps(:)
-        spdiags(icol, :, SPDIAGS_LNSTEP) = log(zsubsteps(:))
+        where (zsubsteps/=0.0_r8)
+           spdiags(icol, :, SPDIAGS_LNSTEP) = log(zsubsteps(:))
+        end where
       end if
     end do
 
