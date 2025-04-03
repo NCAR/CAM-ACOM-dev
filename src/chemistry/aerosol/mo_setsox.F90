@@ -153,7 +153,6 @@ contains
        lwc,    &
        cldfrc, &
        cldnum, &
-       xhnm,   &
        invariants, &
        qcw,    &
        qin,    &
@@ -180,6 +179,8 @@ contains
     !           (b) PARTIONING
     !           (c) REACTION rates
     !           (d) PREDICTION
+    !
+    ! NOTE: This routine assumes an Ideal Gas.
     !-----------------------------------------------------------------------
     !
     use ppgrid,       only : pcols, pver
@@ -205,7 +206,6 @@ contains
     real(r8), target, intent(in)    :: lwc(:,:)          ! cloud liquid water content (kg/kg)
     real(r8), target, intent(in)    :: cldfrc(:,:)       ! cloud fraction
     real(r8),         intent(in)    :: cldnum(:,:)       ! droplet number concentration (#/kg)
-    real(r8),         intent(in)    :: xhnm(:,:)         ! total atms density ( /cm**3)
     real(r8),         intent(in)    :: invariants(:,:,:)
     real(r8), target, intent(inout) :: qcw(:,:,:)        ! cloud-borne aerosol (vmr)
     real(r8),         intent(inout) :: qin(:,:,:)        ! transported species ( vmr )
@@ -230,10 +230,11 @@ contains
     !-----------------------------------------------------------------------
     integer,  parameter :: itermax = 20
     real(r8), parameter :: ph0 = 5.0_r8  ! INITIAL PH VALUES
-    real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8          ! J K-1
     real(r8), parameter :: AVOGADRO = 6.02214076e23_r8          ! mol-1
+    real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8          ! J K-1
     real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8 / 101325.0_r8 ! atm Pa-1
     real(r8), parameter :: M3_TO_L = 1.0e3_r8                   ! L m-3
+    real(r8), parameter :: M3_TO_CM3 = 1.0e6_r8                 ! cm3 m-3
     real(r8), parameter :: SMALL_NUMBER = 1.0e-30_r8
     real(r8), parameter :: const0 = 1.e3_r8/AVOGADRO
     real(r8), parameter :: xa0 = 11._r8
@@ -254,6 +255,7 @@ contains
 
     !
     real(r8) :: xdelso4hp(ncol,pver)
+    real(r8) :: xhnm(ncol,pver) ! air number density (molecules cm-3)
 
     integer  :: k, i, iter, file
     real(r8) :: wrk, delta
@@ -316,6 +318,7 @@ contains
     !      ... Initial values
     !           The values of so2, so4 are after (1) SLT, and CHEM
     !-----------------------------------------------------------------
+    xhnm(:,:) = press(:,:) / (tfld(:,:) * M3_TO_CM3 * BOLTZMANN)  ! air number density (molecules cm-3)
     xph0 = 10._r8**(-ph0)                      ! initial PH value
 
     do k = 1,pver
@@ -808,10 +811,10 @@ contains
 
              ! estimate the net production of so4, without exceeding reactant concentrations
              xso4_init(i,k) = xso4(i,k)
-             ccc            = max(min(pso4*dtime, min(xh2o2(i,k), xso2(i,k))), SMALL_NUMBER)
+             ccc            = max(min(pso4*dtime, min(xh2o2(i,k) - SMALL_NUMBER, xso2(i,k) - SMALL_NUMBER)), 0.0_r8)
              xso4(i,k)      = xso4(i,k) + ccc
-             xh2o2(i,k)     = max(xh2o2(i,k) - ccc, SMALL_NUMBER)
-             xso2(i,k)      = max(xso2(i,k)  - ccc, SMALL_NUMBER)
+             xh2o2(i,k)     = xh2o2(i,k) - ccc
+             xso2(i,k)      = xso2(i,k)  - ccc
              xdelso4hp(i,k) = ccc
 
              !...........................
@@ -827,9 +830,9 @@ contains
 
              ! estimate the net production of so4, without exceeding reactant concentrations
              xso4_init(i,k) = xso4(i,k)
-             ccc            = max(min(pso4*dtime, xso2(i,k)), SMALL_NUMBER)
+             ccc            = max(min(pso4*dtime, xso2(i,k) - SMALL_NUMBER), 0.0_r8)
              xso4(i,k)      = xso4(i,k) + ccc
-             xso2(i,k)      = max(xso2(i,k) - ccc, SMALL_NUMBER)
+             xso2(i,k)      = xso2(i,k) - ccc
 
           END IF !! WHEN CLOUD IS PRESENTED
 

@@ -98,7 +98,6 @@ contains
           new_args(i)%lwc, &
           new_args(i)%cldfrc, &
           new_args(i)%cldnum, &
-          new_args(i)%xhnm, &
           new_args(i)%invariants, &
           new_args(i)%qcw, &
           new_args(i)%qin, &
@@ -125,7 +124,6 @@ contains
           old_args(i)%lwc, &
           old_args(i)%cldfrc, &
           old_args(i)%cldnum, &
-          old_args(i)%xhnm, &
           old_args(i)%invariants, &
           old_args(i)%qcw, &
           old_args(i)%qin, &
@@ -183,7 +181,6 @@ contains
           new_args(i)%lwc, &
           new_args(i)%cldfrc, &
           new_args(i)%cldnum, &
-          new_args(i)%xhnm, &
           new_args(i)%invariants, &
           new_args(i)%qcw, &
           new_args(i)%qin, &
@@ -209,7 +206,6 @@ contains
           old_args(i)%lwc, &
           old_args(i)%cldfrc, &
           old_args(i)%cldnum, &
-          old_args(i)%xhnm, &
           old_args(i)%invariants, &
           old_args(i)%qcw, &
           old_args(i)%qin, &

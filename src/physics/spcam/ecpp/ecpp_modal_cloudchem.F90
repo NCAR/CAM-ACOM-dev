@@ -457,7 +457,6 @@ subroutine parampollu_tdx_cldchem(               &
                cwat_tmp(iccpp:iccpp, :, jcls),   & ! lwc
                cldfra_tmp(iccpp:iccpp, :, jcls), & ! cldfrc
                cldnum, &                           ! cldnum
-               invariants_full(it:it,:,indexm), &  ! xhnm
                invariants_full(it:it,:,:),  &      ! invariants
                vmrcw_3d, &                         ! qcw
                vmr_3d, &                           ! qin

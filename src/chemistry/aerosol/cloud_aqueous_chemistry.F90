@@ -108,6 +108,7 @@ module cloud_aqueous_chemistry
   real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8 ! J K-1
   real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8 ! atm Pa-1
   real(r8), parameter :: M3_TO_L = 1.0e3_r8 ! L m-3
+  real(r8), parameter :: M3_TO_CM3 = 1.0e6_r8 ! cm3 m-3
   real(r8), parameter :: GAS_CONSTANT = BOLTZMANN*AVOGADRO ! J K-1 mol-1
   real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = BOLTZMANN*AVOGADRO*M3_TO_L*PASCAL_TO_ATM ! L atm K-1 mol-1
   real(r8), parameter :: GAS_CONSTANT_DRY_AIR_J_KG_K = 287.0_r8 ! J kg-1 K-1
@@ -184,7 +185,9 @@ contains
   ! Calculates the formation of sulfate and updates sulfate concentrations
   ! due to cloud aqueous chemistry. Also outputs the production rates
   ! (kg m-2 s-1) of various reactions of sulfur species with various
-  ! oxidants (e.g., H2O2(aq), H2SO4(aq)). 
+  ! oxidants (e.g., H2O2(aq), H2SO4(aq)).
+  !
+  ! NOTE: This routine assumes an Ideal Gas.
   !-----------------------------------------------------------------------
   subroutine calculate( state,         &
        pbuf,                           &
@@ -199,7 +202,6 @@ contains
        cloud_water,                    &
        cloud_fraction,                 &
        cloud_droplet_number,           &
-       air_number_density,             &
        fixed_concentrations,           &
        cloud_borne_aerosol_vmr,        &
        species_vmr,                    &
@@ -256,7 +258,6 @@ contains
     real(r8), target, intent(in)    :: cloud_water(:,:)                ! cloud liquid water content (kg_water/kg_air)
     real(r8), target, intent(in)    :: cloud_fraction(:,:)             ! cloud fraction (unitless)
     real(r8),         intent(in)    :: cloud_droplet_number(:,:)       ! droplet number concentration (#/kg)
-    real(r8),         intent(in)    :: air_number_density(:,:)         ! total atmospheric number density (/cm**3)
     real(r8),         intent(in)    :: fixed_concentrations(:,:,:)     ! fixed concentrations (/cm**3) [invariants elsewhere in CAM]
     real(r8), target, intent(inout) :: cloud_borne_aerosol_vmr(:,:,:)  ! cloud-borne aerosol (vmr) mol/mol = m3/m3 [qcw elsewhere in CAM]
     real(r8),         intent(inout) :: species_vmr(:,:,:)              ! transported species (vmr) mol/mol = m3/m3 [qin elsewhere in CAM]
@@ -316,6 +317,9 @@ contains
 
     ! air mass density (kg L-1)
     real(r8), dimension(ncol,pver) :: air_mass_density_kg_l
+
+    ! air number density (molecules cm-3)
+    real(r8), dimension(ncol,pver) :: air_number_density
     
     ! Effective Henry's Law constants (mol L-1 atm-1)
     real(r8), dimension(ncol,pver) :: Heff_h2o2, Heff_so2, Heff_o3
@@ -334,6 +338,8 @@ contains
     real(r8) :: tmp_neg, tmp_pos
     real(r8) :: yph, yph_lo, yph_hi
     real(r8) :: ynetpos, ynetpos_lo, ynetpos_hi
+
+    air_number_density(:,:) = midpoint_pressure(:,:) / (temperature(:,:) * M3_TO_CM3 * BOLTZMANN) ! molecules cm-3
 
     !==================================================================
     ! Set partitioning parameters
@@ -501,9 +507,12 @@ contains
              xno3(i,k) = cloud_composition%no3c(i,k) / cloud_fraction(i,k)
           endif
 
-          molar_to_mixing_ratio(i,k) = cloud_water(i,k) &
-                                       * M3_TO_L * GAS_CONSTANT &
-                                       * temperature(i,k) / midpoint_pressure(i,k)
+          ! Calculate a conversion factor from molar to mixing ratio based on
+          ! the cloud liquid water content in the cloudy fraction of the grid cell (L_H2O L_air-1)
+          molar_to_mixing_ratio(i,k) = cloud_composition%xlwc(i,k) &
+                                       * temperature(i,k) / midpoint_pressure(i,k) &
+                                       * GAS_CONSTANT * M3_TO_L ! (L_H2O mol_air-1)
+                                       
 
           if( cloud_composition%xlwc(i,k) >= MINIMUM_CLOUD_LIQUID_WATER ) then
 
@@ -726,10 +735,10 @@ contains
                           * molar_to_mixing_ratio(i,k)      ! [mol mol-1 s-1]
              endif
              xso4_init(i,k)      = xso4(i,k)
-             delta_concentration = max(min(dso4_dt*time_step, min(xh2o2(i,k), xso2(i,k))), SMALL_NUMBER)
+             delta_concentration = max(min(dso4_dt*time_step, min(xh2o2(i,k) - SMALL_NUMBER, xso2(i,k) - SMALL_NUMBER)), 0.0_r8)
              xso4(i,k)           = xso4(i,k)  + delta_concentration
-             xh2o2(i,k)          = max(xh2o2(i,k) - delta_concentration, SMALL_NUMBER)
-             xso2(i,k)           = max(xso2(i,k)  - delta_concentration, SMALL_NUMBER)
+             xh2o2(i,k)          = xh2o2(i,k) - delta_concentration
+             xso2(i,k)           = xso2(i,k)  - delta_concentration
              change_in_aq_so4_mixing_ratio(i,k) = delta_concentration
 
              !------------------------------------------------------------------------
@@ -747,11 +756,10 @@ contains
                        * o3_aq &                       ! [O3](aq)
                        * Heff_so2(i,k) * so2g * patm & ! [SO2](aq) + [HSO3-](aq) + [SO3--](aq)
                        * molar_to_mixing_ratio(i,k)    ! [mol mol-1 s-1]
-             delta_concentration = max(dso4_dt*time_step, SMALL_NUMBER)
-             delta_concentration = min(delta_concentration, xso2(i,k))
-             xso4_init(i,k) = xso4(i,k)
-             xso4(i,k) = xso4(i,k) + delta_concentration
-             xso2(i,k) = max(xso2(i,k) - delta_concentration, SMALL_NUMBER)
+             xso4_init(i,k)      = xso4(i,k)
+             delta_concentration = max(min(delta_concentration, xso2(i,k) - SMALL_NUMBER), 0.0_r8)
+             xso4(i,k)           = xso4(i,k) + delta_concentration
+             xso2(i,k)           = xso2(i,k) - delta_concentration
 
           END IF !! WHEN CLOUD IS PRESENTED
 

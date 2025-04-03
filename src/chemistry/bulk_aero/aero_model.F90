@@ -1079,7 +1079,6 @@ contains
             cwat,     &
             cldfr,    &
             cldnum,   &
-            airdens,  &
             invariants, &
             vmrcw,    &
             vmr,      &

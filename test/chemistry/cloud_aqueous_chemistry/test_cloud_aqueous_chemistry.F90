@@ -86,7 +86,6 @@ contains
           chem_args(i)%lwc, &
           chem_args(i)%cldfrc, &
           chem_args(i)%cldnum, &
-          chem_args(i)%xhnm, &
           chem_args(i)%invariants, &
           chem_args(i)%qcw, &
           chem_args(i)%qin, &
@@ -141,7 +140,6 @@ contains
           chem_args(i)%lwc, &
           chem_args(i)%cldfrc, &
           chem_args(i)%cldnum, &
-          chem_args(i)%xhnm, &
           chem_args(i)%invariants, &
           chem_args(i)%qcw, &
           chem_args(i)%qin, &
@@ -199,7 +197,6 @@ contains
           new_args(i)%lwc, &
           new_args(i)%cldfrc, &
           new_args(i)%cldnum, &
-          new_args(i)%xhnm, &
           new_args(i)%invariants, &
           new_args(i)%qcw, &
           new_args(i)%qin, &
@@ -225,7 +222,6 @@ contains
           old_args(i)%lwc, &
           old_args(i)%cldfrc, &
           old_args(i)%cldnum, &
-          old_args(i)%xhnm, &
           old_args(i)%invariants, &
           old_args(i)%qcw, &
           old_args(i)%qin, &
@@ -283,7 +279,6 @@ contains
           new_args(i)%lwc, &
           new_args(i)%cldfrc, &
           new_args(i)%cldnum, &
-          new_args(i)%xhnm, &
           new_args(i)%invariants, &
           new_args(i)%qcw, &
           new_args(i)%qin, &
@@ -309,7 +304,6 @@ contains
           old_args(i)%lwc, &
           old_args(i)%cldfrc, &
           old_args(i)%cldnum, &
-          old_args(i)%xhnm, &
           old_args(i)%invariants, &
           old_args(i)%qcw, &
           old_args(i)%qin, &
@@ -774,6 +768,38 @@ contains
                   (abs(a) + abs(b))/2.0_r8 * l_rel_tol + l_abs_tol
 
   end function check_close
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine print_args(chem_args, i_col, i_level)
+
+    type(chemistry_args), intent(in) :: chem_args
+    integer, intent(in) :: i_col, i_level
+
+    write(*,*) "-----------------------------------------------"
+    write(*,*) "CHEMISTRY ARGS FOR COLUMN ", i_col, " AND LEVEL ", i_level
+    write(*,*) "-----------------------------------------------"
+    write(*,*) "lat: ", chem_args%lat(i_col)
+    write(*,*) "lon: ", chem_args%lon(i_col)
+    write(*,*) "pres: ", chem_args%pres(i_col,i_level)
+    write(*,*) "pdel: ", chem_args%pdel(i_col,i_level)
+    write(*,*) "tfld: ", chem_args%tfld(i_col,i_level)
+    write(*,*) "mbar: ", chem_args%mbar(i_col,i_level)
+    write(*,*) "lwc: ", chem_args%lwc(i_col,i_level)
+    write(*,*) "cldfrc: ", chem_args%cldfrc(i_col,i_level)
+    write(*,*) "cldnum: ", chem_args%cldnum(i_col,i_level)
+    write(*,*) "xhnm: ", chem_args%xhnm(i_col,i_level)
+    write(*,*) "invariants: ", chem_args%invariants(i_col,i_level,:)
+    write(*,*) "qcw: ", chem_args%qcw(i_col,i_level,:)
+    write(*,*) "qin: ", chem_args%qin(i_col,i_level,:)
+    write(*,*) "xphlwc: ", chem_args%xphlwc(i_col,i_level)
+    write(*,*) "aqso4: ", chem_args%aqso4(i_col,:)
+    write(*,*) "aqh2so4: ", chem_args%aqh2so4(i_col,:)
+    write(*,*) "aqso4_h2o2: ", chem_args%aqso4_h2o2(i_col)
+    write(*,*) "aqso4_o3: ", chem_args%aqso4_o3(i_col)
+    write(*,*) "-----------------------------------------------"
+
+  end subroutine print_args
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
