@@ -383,7 +383,7 @@
             "__reaction": "CH2O + hv -> H + HCO",
             "cross section": {
                "netcdf files": [
-                 { "file path": "data/cross_sections/CH2O_1.nc" }
+                 { "file path": "data/cross_sections/CH2O_2.nc" }
                ],
                "type": "CH2O"
             },
@@ -402,7 +402,7 @@
             "__reaction": "CH2O + hv -> H2 + CO",
             "cross section": {
                "netcdf files": [
-                 { "file path": "data/cross_sections/CH2O_1.nc" }
+                 { "file path": "data/cross_sections/CH2O_2.nc" }
                ],
                "type": "CH2O"
             },
@@ -421,7 +421,7 @@
             "__reaction": "H2O2 + hv -> OH + OH",
             "cross section": {
                "netcdf files": [
-                 { "file path": "data/cross_sections/H2O2_1.nc" }
+                 { "file path": "data/cross_sections/H2O2_2.nc" }
                ],
                "type": "H2O2+hv->OH+OH"
             },
@@ -667,11 +667,33 @@
             "name": "jcf2clbr",
             "__reaction": "CF2BrCl + hv -> Products",
             "cross section": {
-               "netcdf files": [
-                 { "file path": "data/cross_sections/CF2BrCl_1.nc" }
-               ],
-               "type": "base"
-            },
+               "type": "temperature based",
+               "netcdf file": "data/cross_sections/CF2BrCl_2.nc",
+               "parameterization": {
+                 "AA": [  -134.80,     1.7084, -9.1540e-3,  2.1644e-5,  -1.9863e-8 ],
+                 "BB": [3.3070e-1, -5.0957e-3,  2.9361e-5, -7.6198e-8,  7.6825e-11 ],
+                 "lp": [      0.0,        1.0,        2.0,        3.0,         4.0 ],
+                 "minimum wavelength": 200.0,
+                 "maximum wavelength": 302.0,
+                 "base temperature": 273.0,
+                 "base wavelength": 0.0,
+                 "logarithm": "base 10",
+                 "temperature ranges": [
+                   {
+                     "maximum": 209.999999999999,
+                     "fixed value": 210.0
+                   },
+                   {
+                     "minimum": 210,
+                     "maximum": 300
+                   },
+                   {
+                     "minimum": 300.00000000001,
+                     "fixed value": 300.0
+                   }
+                 ]
+               }
+             },
             "quantum yield": {
                "type": "base",
                "constant value": 1.0
@@ -947,11 +969,33 @@
             "name": "jch3ccl3",
             "__reaction": "CH3CCl3+hv->Products",
             "cross section": {
-               "netcdf files": [
-                 { "file path": "data/cross_sections/CH3CCl3_1.nc" }
-               ],
-               "type": "tint"
-            },
+	       "type": "temperature based",
+               "netcdf file": "data/cross_sections/CH3CCl3_2.nc",
+               "parameterization": {
+		 "AA": [ 341.085191,   -7.273362,  5.498387e-2, -1.827552e-4,   2.238640e-7 ],
+		 "BB": [  -1.660090, 3.079969e-2, -2.106719e-4,  6.264984e-7, -6.781342e-10 ],
+                 "lp": [     0.0,        1.0,        2.0,        3.0,        4.0 ],
+                 "minimum wavelength": 182.0,
+                 "maximum wavelength": 240.0,
+                 "base temperature": 273.0,
+                 "base wavelength": 0.0,
+                 "logarithm": "base 10",
+                 "temperature ranges": [
+                   {
+                     "maximum": 209.999999999999,
+                     "fixed value": 210.0
+                   },
+                   {
+                     "minimum": 210,
+                     "maximum": 300
+                   },
+                   {
+                     "minimum": 300.00000000001,
+                     "fixed value": 300.0
+                   }
+                 ]
+               }
+             },
             "quantum yield": {
                "type": "base",
                "constant value": 1.0
@@ -1110,7 +1154,7 @@
             "__reaction": "CClFO + hv -> Products",
             "cross section": {
                "netcdf files": [
-                 { "file path": "data/cross_sections/CClFO_1.nc" }
+                 { "file path": "data/cross_sections/CClFO_2.nc" }
                ],
                "type": "base"
             },
