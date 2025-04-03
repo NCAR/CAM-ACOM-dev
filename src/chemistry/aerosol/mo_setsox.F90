@@ -23,7 +23,7 @@ module mo_setsox
   logical :: cloud_borne = .false.
 
   ! Inidices for species in the shared array of Henry's Law constant parameters
-  integer :: heff_id_hno3
+  integer :: heff_id_hno3, heff_id_so2
 
 contains
 
@@ -125,8 +125,9 @@ contains
     ! Lookup Effective Henry's Law Constant parameters from the common
     ! data file read in the shared code.
     heff_id_hno3 = get_heff_index( 'HNO3' )
+    heff_id_so2  = get_heff_index( 'SO2' )
 
-    has_sox = has_sox .and. (heff_id_hno3 > 0)
+    has_sox = has_sox .and. (heff_id_hno3 > 0) .and. (heff_id_so2 > 0)
 
     if( has_sox ) then
        if (masterproc) then
@@ -474,9 +475,9 @@ contains
              !          = xk*xe*patm*xso2/(1 + xk*ra*tz*xl*(1 + (xe/hplus)*(1 + x2/hplus))
              !          = ( fact1_so2    )/(1 + fact2_so2 *(1 + (fact3_so2/hplus)*(1 + fact4_so2/hplus)
              !    [hso3-] + 2*[so3--] = (eso2/hplus)*(1 + 2*x2/hplus)
-             xk = 1.23_r8  *EXP( 3120._r8*work1(i) )
-             xe = 1.7e-2_r8*EXP( 2090._r8*work1(i) )
-             x2 = 6.0e-8_r8*EXP( 1120._r8*work1(i) )
+             xk = dheff(1,heff_id_so2) * exp( dheff(2,heff_id_so2) * work1(i) )
+             xe = dheff(3,heff_id_so2) * exp( dheff(4,heff_id_so2) * work1(i) )
+             x2 = dheff(5,heff_id_so2) * exp( dheff(6,heff_id_so2) * work1(i) )
              fact1_so2 = xk*xe*patm*xso2(i,k)
              fact2_so2 = xk*ra*tz*xl
              fact3_so2 = xe
@@ -673,8 +674,8 @@ contains
           !-----------------------------------------------------------------------
           !        ... hno3
           !-----------------------------------------------------------------------
-          xk = 2.1e5_r8 *EXP( 8700._r8*work1(i) )
-          xe = 15.4_r8
+          xk = dheff(1,heff_id_hno3) * exp( dheff(2,heff_id_hno3) * work1(i) )
+          xe = dheff(3,heff_id_hno3) * exp( dheff(4,heff_id_hno3) * work1(i) )
           hehno3(i,k)  = xk*(1._r8 + xe/xph(i,k))
 
           !-----------------------------------------------------------------
@@ -687,9 +688,9 @@ contains
           !-----------------------------------------------------------------
           !         ... so2
           !-----------------------------------------------------------------
-          xk = 1.23_r8  *EXP( 3120._r8*work1(i) )
-          xe = 1.7e-2_r8*EXP( 2090._r8*work1(i) )
-          x2 = 6.0e-8_r8*EXP( 1120._r8*work1(i) )
+          xk = dheff(1,heff_id_so2) * exp( dheff(2,heff_id_so2) * work1(i) )
+          xe = dheff(3,heff_id_so2) * exp( dheff(4,heff_id_so2) * work1(i) )
+          x2 = dheff(5,heff_id_so2) * exp( dheff(6,heff_id_so2) * work1(i) )
 
           wrk = xe/xph(i,k)
           heso2(i,k)  = xk*(1._r8 + wrk*(1._r8 + x2/xph(i,k)))

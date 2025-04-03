@@ -393,14 +393,23 @@ contains
     ! All the values for the Henry's Law constants in:
     ! Sander, R., 2015. Compilation of Henry's law constants (version 4) for water as solvent.
     ! Atmos. Chem. Phys., 15, 4399–4981, 2015. DOI: 10.5194/acp-15-4399-2015
+    !
+    ! NOTE: Updated to use CESM NetCDF file for HNO3 Henry's Law constant parameters
     hl_so2 = henrys_law_t( ncol, pver )
     hl_so2%type_ = HENRYS_LAW_DIPROTIC_ACID
-    hl_so2%partitioning_factor_%A_ = 1.23_r8           ! M atm-1
-    hl_so2%partitioning_factor_%B_ = 3120.0_r8         ! K
-    hl_so2%first_dissociation_factor_%A_ = 1.7e-2_r8   ! M
-    hl_so2%first_dissociation_factor_%B_ = 2090.0_r8   ! K
-    hl_so2%second_dissociation_factor_%A_ = 6.0e-8_r8  ! M
-    hl_so2%second_dissociation_factor_%B_ = 1120.0_r8  ! K
+    ! original:
+    !hl_so2%partitioning_factor_%A_ = 1.23_r8           ! M atm-1
+    !hl_so2%partitioning_factor_%B_ = 3120.0_r8         ! K
+    !hl_so2%first_dissociation_factor_%A_ = 1.7e-2_r8   ! M
+    !hl_so2%first_dissociation_factor_%B_ = 2090.0_r8   ! K
+    !hl_so2%second_dissociation_factor_%A_ = 6.0e-8_r8  ! M
+    !hl_so2%second_dissociation_factor_%B_ = 1120.0_r8  ! K
+    hl_so2%partitioning_factor_%A_ = 1.36_r8           ! M atm-1
+    hl_so2%partitioning_factor_%B_ = 3100.0_r8         ! K
+    hl_so2%first_dissociation_factor_%A_ = 1.3e-2_r8   ! M
+    hl_so2%first_dissociation_factor_%B_ = 1960.0_r8   ! K
+    hl_so2%second_dissociation_factor_%A_ = 6.6e-8_r8  ! M
+    hl_so2%second_dissociation_factor_%B_ = 1500.0_r8  ! K
 
     ! NH3 partitioning parameters
     !

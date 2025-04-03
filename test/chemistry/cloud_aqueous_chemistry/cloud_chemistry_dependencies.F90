@@ -20,15 +20,15 @@ module shr_drydep_mod
   public :: n_species_table, species_name_table, dheff
   integer, parameter :: n_species_table = 4
   character(len=16), parameter :: species_name_table(*) = (/ &
-    'SO2             ', &
+    'FOO             ', &
     'HNO3            ', &
-    'SO4             ', &
-    'H2SO4           ' /)
+    'BAR             ', &
+    'SO2             ' /)
   real(kind=r8), parameter :: dheff(6,n_species_table) = reshape( &
-    [   0.0_r8,    0.0_r8,  0.0_r8, 0.0_r8, 0.0_r8, 0.0_r8, &
-      2.1e5_r8, 8700.0_r8, 22.0_r8, 0.0_r8, 0.0_r8, 0.0_r8, & ! HNO3
-        0.0_r8,    0.0_r8,  0.0_r8, 0.0_r8, 0.0_r8, 0.0_r8, &
-        0.0_r8,    0.0_r8,  0.0_r8, 0.0_r8, 0.0_r8, 0.0_r8 ], &
+    [   0.0_r8,    0.0_r8,   0.0_r8,    0.0_r8,    0.0_r8,    0.0_r8,   &
+      2.1e5_r8, 8700.0_r8,  22.0_r8,    0.0_r8,    0.0_r8,    0.0_r8,   & ! HNO3
+        0.0_r8,    0.0_r8,   0.0_r8,    0.0_r8,    0.0_r8,    0.0_r8,   &
+       1.36_r8, 3100.0_r8, 0.013_r8, 1960.0_r8, 6.6e-8_r8, 1500.0_r8 ], & ! SO2
     [6, n_species_table])
 end module shr_drydep_mod
 
