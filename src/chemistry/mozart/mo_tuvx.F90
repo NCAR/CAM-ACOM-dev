@@ -89,7 +89,7 @@ module mo_tuvx
                                        !   ionization rates
 
    ! Information needed to do special NO photolysis rate calculation
-   logical :: do_jno     = .false. ! Indicates whether to calculate jno
+   logical :: do_jno     = .true. ! Indicates whether to calculate jno
    integer :: jno_index  = 0       ! Index in tuvx_ptr::photo_rates_ array for jno
 
    ! Cutoff solar zenith angle for doing photolysis rate calculations [degrees]
@@ -522,15 +522,16 @@ contains
       use chem_mods,        only : phtcnt,    & ! number of photolysis reactions
                                    gas_pcnst, & ! number of non-fixed species
                                    nfs,       & ! number of fixed species
-                                   nabscol      ! number of absorbing species (radiators)
+                                   nabscol,   & ! number of absorbing species (radiators)
+                                   rxt_tag_lst  ! labels for all chemical reactions
       use physics_types,    only : physics_state
       use physics_buffer,   only : physics_buffer_desc
       use physics_buffer,   only : pbuf_get_field
       use ppgrid,           only : pcols        ! maximum number of columns
       use shr_const_mod,    only : pi => shr_const_pi
       use spmd_utils,       only : main_task => masterprocid, &
-         is_main_task => masterproc, &
-         mpicom
+                                   is_main_task => masterproc, &
+                                   mpicom
 
       type(physics_state),       target,  intent(in)    :: state
       type(physics_buffer_desc), pointer, intent(inout) :: pbuf(:)
@@ -554,7 +555,7 @@ contains
       real(r8), intent(in)    :: liquid_water_content(ncol,pver)    ! liquid water content (kg/kg)
       real(r8), intent(inout) :: photolysis_rates(ncol,pver,phtcnt) ! photolysis rate
                                                                     !   constants (1/s)
-
+      integer :: ipht
       integer  :: i_col   ! column index
       integer  :: i_level ! vertical level index
       real(r8) :: sza     ! solar zenith angle [degrees]
@@ -675,6 +676,10 @@ contains
          end do
 
          call output_diagnostics( tuvx, ncol, lchnk, photo_rates )
+
+         do ipht = 1, phtcnt
+            call outfld( 'tuvcam_'//trim(rxt_tag_lst(ipht)), photolysis_rates(:ncol,:,ipht), ncol, lchnk )
+         end do
 
       end associate
 
@@ -869,14 +874,19 @@ contains
    !-----------------------------------------------------------------------
    subroutine initialize_diagnostics( this )
 
-      use cam_history,   only : addfld
+      use cam_history,   only : addfld, add_default
       use musica_assert, only : assert
       use musica_string, only : string_t
+      use chem_mods,     only : phtcnt, &   ! number of photolysis reactions
+                                rxt_tag_lst ! labels for all chemical reactions
 
       type(tuvx_ptr), intent(in) :: this
 
       type(string_t), allocatable :: labels(:), all_labels(:)
-      integer :: i_label
+      integer :: i_label, i_euv
+      integer :: ipht
+
+      character(len=2) :: numstr
 
       if( .not. enable_diagnostics ) then
          allocate( diagnostics( 0 ) )
@@ -887,20 +897,39 @@ contains
       ! add output for specific photolysis reaction rate constants
       ! ==========================================================
       labels = this%core_%photolysis_reaction_labels( )
-      allocate( all_labels( size( labels ) + this%n_special_rates_ ) )
+      allocate( all_labels( size( labels ) + this%n_euv_rates_ + this%n_special_rates_ ) )
+
       all_labels( 1 : size( labels ) ) = labels(:)
-      i_label = size( labels ) + 1
+      i_label = size( labels )
+
+      if( do_euv ) then
+         do i_euv = 1,this%n_euv_rates_
+            i_label = i_label + 1
+            write(numstr,fmt='(I2)') i_euv
+            all_labels( i_label ) = "jeuv_"//trim(adjustl(numstr))
+         end do
+      end if
+
+      i_label = i_label + 1
+
       if( do_jno ) then
          all_labels( i_label ) = "jno"
          i_label = i_label + 1
       end if
+
       call assert( 522515214, i_label == size( all_labels ) + 1 )
       allocate( diagnostics( size( all_labels ) ) )
       do i_label = 1, size( all_labels )
          diagnostics( i_label )%name_  = trim( all_labels( i_label )%to_char( ) )
          diagnostics( i_label )%index_ = i_label
          call addfld( "tuvx_"//diagnostics( i_label )%name_, (/ 'lev' /), 'A', 'sec-1', &
-            'photolysis rate constant' )
+                      trim(diagnostics( i_label )%name_)//' photolysis rate constant' )
+         call add_default("tuvx_"//diagnostics( i_label )%name_,3,' ')
+      end do
+
+      do ipht = 1, phtcnt
+         call addfld('tuvcam_'//trim(rxt_tag_lst(ipht)), (/ 'lev' /), 'A', 'sec-1', 'photolysis rate constant' )
+         call add_default('tuvcam_'//trim(rxt_tag_lst(ipht)), 3,' ')
       end do
 
    end subroutine initialize_diagnostics
@@ -1938,7 +1967,8 @@ contains
       ! calculate the NO photolysis rate constant
       ! =========================================
       call calc_jno( pver+1, et_flux, n2_dens, o2_slant, o3_slant, no_slant, work_jno )
-      jno(:) = work_jno(pver:1:-1)
+
+      jno(:pver) = work_jno(:pver)
 
    end subroutine calculate_jno
 
