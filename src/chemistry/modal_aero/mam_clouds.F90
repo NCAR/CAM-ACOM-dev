@@ -29,6 +29,7 @@ module mam_clouds
 
   real(r8), parameter :: small_value = 1.e-20_r8
 
+  integer, parameter, public :: mam_id = 3
 contains
 
 !----------------------------------------------------------------------------------

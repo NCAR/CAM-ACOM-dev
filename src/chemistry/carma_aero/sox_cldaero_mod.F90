@@ -3,7 +3,7 @@
 !----------------------------------------------------------------------------------
 module sox_cldaero_mod
 
-  use physics_buffer,  only : physics_buffer_desc, pbuf_get_index, pbuf_get_field, dtype_r8
+  use physics_buffer,  only : physics_buffer_desc, pbuf_get_index, dtype_r8
   use shr_kind_mod,    only : r8 => shr_kind_r8
   use cam_abortutils,  only : endrun
   use ppgrid,          only : pcols, pver
@@ -73,6 +73,7 @@ contains
 
     call rad_cnst_get_info( 0, nbins=nbins)
 
+    if (allocated(nspec)) deallocate( nspec )
     allocate( nspec(nbins) )
 
     do m = 1, nbins
@@ -86,6 +87,7 @@ contains
       ncnst_tot = ncnst_tot + nspec(m)
     end do
 
+   if (allocated(bin_idx)) deallocate( bin_idx )
    allocate(  bin_idx(nbins,nspec_max) )
 
 

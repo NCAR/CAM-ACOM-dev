@@ -3,7 +3,7 @@
 !----------------------------------------------------------------------------------
 module carma_clouds
 
-  use physics_buffer,  only : physics_buffer_desc, pbuf_get_index, pbuf_get_field, dtype_r8
+  use physics_buffer,  only : physics_buffer_desc, pbuf_get_index, dtype_r8
   use shr_kind_mod,    only : r8 => shr_kind_r8
   use cam_abortutils,  only : endrun
   use ppgrid,          only : pcols, pver
@@ -18,7 +18,7 @@ module carma_clouds
   use phys_control,    only : phys_getopts
   use chem_mods,       only : gas_pcnst
   use rad_constituents, only: rad_cnst_get_info, rad_cnst_get_info_by_bin, rad_cnst_get_bin_props_by_idx
-use spmd_utils,     only: masterproc
+  use spmd_utils,      only: masterproc
 
   implicit none
   private
@@ -40,6 +40,8 @@ use spmd_utils,     only: masterproc
   ! local indexing for bins
   integer, allocatable :: bin_idx(:,:) ! table for local indexing of modal aero number and mmr
   integer :: ncnst_tot                  ! total number of mode number conc + mode species
+
+  integer, parameter, public :: carma_id = 2
 
 contains
 
@@ -72,6 +74,7 @@ contains
 
     call rad_cnst_get_info( 0, nbins=nbins)
 
+    if (allocated(nspec)) deallocate( nspec )
     allocate( nspec(nbins) )
 
     do m = 1, nbins
@@ -85,6 +88,7 @@ contains
       ncnst_tot = ncnst_tot + nspec(m)
     end do
 
+   if (allocated(bin_idx)) deallocate( bin_idx )
    allocate(  bin_idx(nbins,nspec_max) )
 
 

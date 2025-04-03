@@ -11,13 +11,15 @@
 !----------------------------------------------------------------------------------
 module cloud_aqueous_chemistry
 
-#define USE_MAM
-#undef USE_CARMA
-
   use shr_kind_mod,      only : r8 => shr_kind_r8
   use cam_logfile,       only : iulog
   use physics_buffer,    only: physics_buffer_desc
   use physics_types,     only: physics_state
+
+  ! Temporary to get CMake to pick up these dependencies
+  use bam_clouds,        only : bam_id
+  use mam_clouds,        only : mam_id
+  use carma_clouds,      only : carma_id
 
   implicit none
 
@@ -49,10 +51,10 @@ module cloud_aqueous_chemistry
   logical :: cloud_borne = .false.
 
   ! Constants that should be moved to a common module
-  real(r8), parameter :: AVOGADRO = 6.02214129e23_r8 ! mol-1
+  real(r8), parameter :: AVOGADRO = 6.023e23_r8 ! 6.02214129e23_r8 ! mol-1
+  real(r8), parameter :: BOLTZMANN = 1.38e-23_r8 ! 1.380649e-23_r8 ! J K-1
   real(r8), parameter :: PASCAL_TO_ATM = 1.0_r8/101325.0_r8
-  real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314.46261815324_r8*PASCAL_TO_ATM
-  real(r8), parameter :: BOLTZMANN = 1.380649e-23_r8 ! J K-1
+  real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = 8314._r8*PASCAL_TO_ATM ! 8314.46261815324_r8*PASCAL_TO_ATM
   real(r8), parameter :: GAS_CONSTANT_DRY_AIR_J_KG_K = 287.0_r8 ! J kg-1 K-1
   real(r8), parameter :: SMALL_NUMBER = 1.e-30_r8 ! unitless
 
@@ -70,6 +72,9 @@ contains
     use spmd_utils,      only : masterproc
     use phys_control,    only : phys_getopts
     use carma_flags_mod, only : carma_do_cloudborne
+#ifdef USE_BAM
+    use bam_clouds,      only : sox_cldaero_init
+#endif
 #ifdef USE_MAM
     use mam_clouds,      only : sox_cldaero_init
 #endif
@@ -172,6 +177,10 @@ contains
     !-----------------------------------------------------------------------
     !
     use ppgrid,          only : pver
+#ifdef USE_BAM
+    use bam_clouds,      only : sox_cldaero_update, sox_cldaero_create_obj, &
+                                sox_cldaero_destroy_obj
+#endif
 #ifdef USE_MAM
     use mam_clouds,      only : sox_cldaero_update, sox_cldaero_create_obj, &
                                 sox_cldaero_destroy_obj
