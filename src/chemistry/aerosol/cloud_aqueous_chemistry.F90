@@ -63,7 +63,6 @@ module cloud_aqueous_chemistry
   integer, parameter :: HENRYS_LAW_BASE = 3
   integer, parameter :: HENRYS_LAW_NEUTRAL = 4
   integer, parameter :: HENRYS_LAW_HO2 = 5
-  integer, parameter :: HENRYS_LAW_CO2 = 6
 
   !> @brief Henry's Law parameters for acids and bases
   !! Calculates an equilibrium concentration of the dissociated acid based on the
@@ -437,12 +436,20 @@ contains
     ! Chameides, W. L. (1984), The photochemistry of a remote marine stratiform cloud,
     ! J. Geophys. Res., 89(D3), 4739–4755, doi:10.1029/JD089iD03p04739.
     ! Original source: National Bureau of Standards [1965]
+    ! original:
+    !hl_co2 = henrys_law_t( ncol, pver )
+    !hl_co2%type_ = HENRYS_LAW_CO2
+    !hl_co2%partitioning_factor_%A_ = 3.1e-2_r8        ! M atm-1 NOTE: 3.11e-2 in Chameides (1984)
+    !hl_co2%first_dissociation_factor_%A_ = 4.3e-7_r8  ! M
+    !hl_co2%first_dissociation_factor_%B_ = -913.0_r8  ! K
     hl_co2 = henrys_law_t( ncol, pver )
-    hl_co2%type_ = HENRYS_LAW_CO2
-    hl_co2%partitioning_factor_%A_ = 3.1e-2_r8        ! M atm-1 NOTE: 3.11e-2 in Chameides (1984)
-    hl_co2%partitioning_factor_%B_ = 2423.0_r8        ! K
-    hl_co2%first_dissociation_factor_%A_ = 4.3e-7_r8  ! M
-    hl_co2%first_dissociation_factor_%B_ = -913.0_r8  ! K
+    hl_co2%type_ = HENRYS_LAW_DIPROTIC_ACID
+    hl_co2%partitioning_factor_%A_ = 3.44e-2_r8        ! M atm-1
+    hl_co2%partitioning_factor_%B_ = 2715.0_r8         ! K
+    hl_co2%first_dissociation_factor_%A_ = 4.3e-7_r8   ! M
+    hl_co2%first_dissociation_factor_%B_ = -1000.0_r8  ! K
+    hl_co2%second_dissociation_factor_%A_ = 4.7e-11_r8 ! M
+    hl_co2%second_dissociation_factor_%B_ = -1760.0_r8 ! K
 
     ! H2O2 paritioning parameters
     !
@@ -968,8 +975,7 @@ contains
            * exp( this%partitioning_factor_%B_ * temp_delta )                    ! mol L-1 atm-1
       if (this%type_ == HENRYS_LAW_MONOPROTIC_ACID .or. &
           this%type_ == HENRYS_LAW_DIPROTIC_ACID .or. &
-          this%type_ == HENRYS_LAW_NEUTRAL .or. &
-          this%type_ == HENRYS_LAW_CO2) then
+          this%type_ == HENRYS_LAW_NEUTRAL) then
          v2 = this%first_dissociation_factor_%A_ &
               * exp( this%first_dissociation_factor_%B_ * temp_delta )           ! mol L-1
          if (this%type_ == HENRYS_LAW_DIPROTIC_ACID) then

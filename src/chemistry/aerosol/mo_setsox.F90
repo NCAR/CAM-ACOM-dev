@@ -23,7 +23,7 @@ module mo_setsox
   logical :: cloud_borne = .false.
 
   ! Inidices for species in the shared array of Henry's Law constant parameters
-  integer :: heff_id_hno3, heff_id_so2, heff_id_nh3
+  integer :: heff_id_hno3, heff_id_so2, heff_id_nh3, heff_id_co2
 
 contains
 
@@ -127,9 +127,10 @@ contains
     heff_id_hno3 = get_heff_index( 'HNO3' )
     heff_id_so2  = get_heff_index( 'SO2'  )
     heff_id_nh3  = get_heff_index( 'NH3'  )
+    heff_id_co2  = get_heff_index( 'CO2'  )
 
     has_sox = has_sox .and. (heff_id_hno3 > 0) .and. (heff_id_so2 > 0) &
-               .and. (heff_id_nh3 > 0)
+               .and. (heff_id_nh3 > 0) .and. (heff_id_co2 > 0)
 
     if( has_sox ) then
        if (masterproc) then
@@ -314,6 +315,7 @@ contains
     real(r8) :: fact1_hno3, fact2_hno3, fact3_hno3
     real(r8) :: fact1_so2, fact2_so2, fact3_so2, fact4_so2
     real(r8) :: fact1_nh3, fact2_nh3, fact3_nh3
+    real(r8) :: fact1_co2, fact2_co2, fact3_co2, fact4_co2
     real(r8) :: tmp_hp, tmp_hso3, tmp_hco3, tmp_nh4, tmp_no3
     real(r8) :: tmp_oh, tmp_so3, tmp_so4
     real(r8) :: tmp_neg, tmp_pos
@@ -522,10 +524,17 @@ contains
 
              !-----------------------------------------------------------------
              !        ... co2 effects
+             ! NOTE: Algorithm modified to follow that used in wet deposition.
+             !       This now applies the same algorithm for diprotic acids used
+             !       for SO2.
              !-----------------------------------------------------------------
-             xk = 3.1e-2_r8*EXP( 2423._r8*work1(i) )
-             xe = 4.3e-7_r8*EXP(-913._r8 *work1(i) )
-             Eco2 = xk*xe*xco2(i,k)*patm
+             xk = dheff(1,heff_id_co2) * exp( dheff(2,heff_id_co2) * work1(i) )
+             xe = dheff(3,heff_id_co2) * exp( dheff(4,heff_id_co2) * work1(i) )
+             x2 = dheff(5,heff_id_co2) * exp( dheff(6,heff_id_co2) * work1(i) )
+             fact1_co2 = xk*xe*patm*xco2(i,k)
+             fact2_co2 = xk*ra*tz*xl
+             fact3_co2 = xe
+             fact4_co2 = x2
 
              !-----------------------------------------------------------------
              !         ... so4 effect
@@ -583,6 +592,12 @@ contains
                 !          ... nh3
                 !-----------------------------------------------------------------
                 Enh3 = fact1_nh3/(1.0_r8 + fact2_nh3*(1.0_r8 + fact3_nh3*xph(i,k)))
+
+                !-----------------------------------------------------------------
+                !          ... co2
+                !-----------------------------------------------------------------
+                Eco2 = fact1_co2/(1.0_r8 + fact2_co2*(1.0_r8 + (fact3_co2/xph(i,k)) &
+                     *(1.0_r8 +  fact4_co2/xph(i,k))))
 
                 tmp_nh4  = Enh3 * xph(i,k)
                 tmp_hso3 = Eso2 / xph(i,k)
