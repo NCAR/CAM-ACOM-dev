@@ -18,7 +18,7 @@ module shr_drydep_mod
   implicit none
   private
   public :: n_species_table, species_name_table, dheff
-  integer, parameter :: n_species_table = 7
+  integer, parameter :: n_species_table = 8
   character(len=16), parameter :: species_name_table(*) = (/ &
     'FOO             ', &
     'HNO3            ', &
@@ -26,6 +26,7 @@ module shr_drydep_mod
     'SO2             ', &
     'H2O2            ', &
     'BAR             ', &
+    'OX              ', &
     'CO2             ' /)
   real(kind=r8), parameter :: dheff(6,n_species_table) = reshape( &
     [     0.0_r8,    0.0_r8,     0.0_r8,     0.0_r8,     0.0_r8,     0.0_r8,   &
@@ -34,6 +35,7 @@ module shr_drydep_mod
          1.36_r8, 3100.0_r8,   0.013_r8,  1960.0_r8,  6.6e-8_r8,  1500.0_r8,   & ! SO2
         8.7e4_r8, 7320.0_r8, 2.2e-12_r8, -3730.0_r8,     0.0_r8,     0.0_r8,   & ! H2O2
           0.0_r8,    0.0_r8,     0.0_r8,     0.0_r8,     0.0_r8,     0.0_r8,   & ! BAR
+      1.03e-2_r8, 2830.0_r8,     0.0_r8,     0.0_r8,     0.0_r8,     0.0_r8,   & ! OX
       3.44e-2_r8, 2715.0_r8,  4.3e-7_r8, -1000.0_r8, 4.7e-11_r8, -1760.0_r8 ], & ! CO2
     [6, n_species_table])
 end module shr_drydep_mod

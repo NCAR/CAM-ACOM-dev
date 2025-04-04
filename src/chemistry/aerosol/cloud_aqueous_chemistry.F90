@@ -492,10 +492,15 @@ contains
     ! Chameides, W. L. (1984), The photochemistry of a remote marine stratiform cloud,
     ! J. Geophys. Res., 89(D3), 4739–4755, doi:10.1029/JD089iD03p04739.
     ! Original source: National Bureau of Standards [1965]
+    ! original:
+    !hl_o3 = henrys_law_t( ncol, pver )
+    !hl_o3%type_ = HENRYS_LAW_NEUTRAL
+    !hl_o3%partitioning_factor_%A_ = 1.15e-2_r8 ! M atm-1
+    !hl_o3%partitioning_factor_%B_ = 2560.0_r8  ! K
     hl_o3 = henrys_law_t( ncol, pver )
     hl_o3%type_ = HENRYS_LAW_NEUTRAL
-    hl_o3%partitioning_factor_%A_ = 1.15e-2_r8 ! M atm-1
-    hl_o3%partitioning_factor_%B_ = 2560.0_r8  ! K
+    hl_o3%partitioning_factor_%A_ = 1.03e-2_r8 ! M atm-1
+    hl_o3%partitioning_factor_%B_ = 2830.0_r8  ! K
 
     !==================================================================
     !       ... First set the PH

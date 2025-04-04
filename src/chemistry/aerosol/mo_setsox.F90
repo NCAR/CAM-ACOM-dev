@@ -23,7 +23,7 @@ module mo_setsox
   logical :: cloud_borne = .false.
 
   ! Inidices for species in the shared array of Henry's Law constant parameters
-  integer :: heff_id_hno3, heff_id_so2, heff_id_nh3, heff_id_co2, heff_id_h2o2
+  integer :: heff_id_hno3, heff_id_so2, heff_id_nh3, heff_id_co2, heff_id_h2o2, heff_id_o3
 
 contains
 
@@ -129,10 +129,11 @@ contains
     heff_id_nh3  = get_heff_index( 'NH3'  )
     heff_id_co2  = get_heff_index( 'CO2'  )
     heff_id_h2o2 = get_heff_index( 'H2O2' )
+    heff_id_o3   = get_heff_index( 'OX'   )
 
     has_sox = has_sox .and. (heff_id_hno3 > 0) .and. (heff_id_so2 > 0) &
                .and. (heff_id_nh3 > 0) .and. (heff_id_co2 > 0) &
-               .and. (heff_id_h2o2 > 0)
+               .and. (heff_id_h2o2 > 0) .and. (heff_id_o3 > 0)
 
 
     if( has_sox ) then
@@ -732,7 +733,7 @@ contains
           !-----------------------------------------------------------------
           !        ... o3
           !-----------------------------------------------------------------
-          xk = 1.15e-2_r8 *EXP( 2560._r8*work1(i) )
+          xk = dheff(1,heff_id_o3) * exp( dheff(2,heff_id_o3) * work1(i) )
           heo3(i,k) = xk
 
           !------------------------------------------------------------------------
