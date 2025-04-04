@@ -80,6 +80,7 @@ module cloud_aqueous_chemistry
     type(van_t_hoff_t) :: first_dissociation_factor_ ! A = mol L-1, B = K
     type(van_t_hoff_t) :: second_dissociation_factor_! A = mol L-1, B = K
     type(van_t_hoff_t) :: protonation_factor_        ! A = mol L-1, B = K
+    type(van_t_hoff_t) :: water_dissociation_        ! A = mol2 L-2, B = K
     type(van_t_hoff_t) :: ho2__hplus_o2minus_        ! A = mol2 L-2, B = K
     type(van_t_hoff_t) :: ho2_ho2__h2o2_o2_          ! A = mol2 L-2, B = K
     type(van_t_hoff_t) :: ho2_o2minus__h2o2_o2_      ! A = mol2 L-2, B = K
@@ -113,7 +114,6 @@ module cloud_aqueous_chemistry
   real(r8), parameter :: GAS_CONSTANT_L_ATM_MOL_K = BOLTZMANN*AVOGADRO*M3_TO_L*PASCAL_TO_ATM ! L atm K-1 mol-1
   real(r8), parameter :: GAS_CONSTANT_DRY_AIR_J_KG_K = 287.0_r8 ! J kg-1 K-1
   real(r8), parameter :: SMALL_NUMBER = 1.0e-30_r8 ! unitless
-  real(r8), parameter :: WATER_DISSOCIATION_CONSTANT = 1.0e-14_r8 ! mol2/L2  [H+][OH-]
 
 contains
 
@@ -332,6 +332,10 @@ contains
     ! Information about cloud composition
     type(cldaero_conc_t), pointer :: cloud_composition
 
+    ! Water dissociation constant terms
+    type(van_t_hoff_t) :: water_dissociation
+    real(r8) :: K_h2o
+
     ! TODO: Skipping renaming of these in anticipation of partitioning/pH estimation structs
     real(r8) :: tmp_hp, tmp_hso3, tmp_hco3, tmp_nh4, tmp_no3
     real(r8) :: tmp_oh, tmp_so3, tmp_so4
@@ -411,6 +415,10 @@ contains
     hl_so2%second_dissociation_factor_%A_ = 6.6e-8_r8  ! M
     hl_so2%second_dissociation_factor_%B_ = 1500.0_r8  ! K
 
+    ! Water dissociation constant (Taken from wet deposition data)
+    water_dissociation%A_ = 1.0e-14_r8 ! M2
+    water_dissociation%B_ = -6716.0_r8 ! K
+
     ! NH3 partitioning parameters
     !
     ! Chameides, W. L. (1984), The photochemistry of a remote marine stratiform cloud,
@@ -418,10 +426,11 @@ contains
     ! Original source: National Bureau of Standards [1965]
     hl_nh3 = henrys_law_t( ncol, pver )
     hl_nh3%type_ = HENRYS_LAW_BASE
-    hl_nh3%partitioning_factor_%A_ = 58.0_r8   ! M atm-1
-    hl_nh3%partitioning_factor_%B_ = 4085.0_r8 ! K
+    hl_nh3%partitioning_factor_%A_ = 60.2_r8   ! M atm-1
+    hl_nh3%partitioning_factor_%B_ = 4160.0_r8 ! K
     hl_nh3%protonation_factor_%A_ = 1.7e-5_r8  ! M
     hl_nh3%protonation_factor_%B_ = -4325.0_r8 ! K
+    hl_nh3%water_dissociation_ = water_dissociation
 
     ! CO2 partitioning parameters
     !
@@ -552,6 +561,12 @@ contains
              so4_aq = xso4(i,k) / molar_to_mixing_ratio(i,k) ! mol(so4)/L(w)
 
              !-----------------------------------------------------------------
+             !         ... Temperature-dependent water dissociation constant
+             !-----------------------------------------------------------------
+             K_h2o = water_dissociation%A_ * exp( water_dissociation%B_ * &
+                     ( 1.0_r8 / temperature(i,k) - 1.0_r8 / 298.0_r8 ) )
+
+             !-----------------------------------------------------------------
              ! 21-mar-2011 chamges by rce
              ! now use bisection method to solve electro-neutrality equation
              !
@@ -597,7 +612,7 @@ contains
                 tmp_hso3 = Eso2 / h_plus_conc(i,k)
                 tmp_so3  = tmp_hso3 * 2.0_r8*hl_so2%terms_(5,i,k) / h_plus_conc(i,k)
                 tmp_hco3 = Eco2 / h_plus_conc(i,k)
-                tmp_oh   = WATER_DISSOCIATION_CONSTANT / h_plus_conc(i,k)
+                tmp_oh   = K_h2o / h_plus_conc(i,k)
                 tmp_no3  = Ehno3 / h_plus_conc(i,k)
                 tmp_so4 = cloud_composition%so4_fact*so4_aq
                 tmp_pos = h_plus_conc(i,k) + tmp_nh4
@@ -977,7 +992,8 @@ contains
       if (this%type_ == HENRYS_LAW_BASE) then
          v4_kw = this%protonation_factor_%A_ &
                  * exp( this%protonation_factor_%B_ * temp_delta ) / &
-                 WATER_DISSOCIATION_CONSTANT                                     ! mol L-1
+                 ( this%water_dissociation_%A_ &
+                   * exp( this%water_dissociation_%B_ * temp_delta ) )           ! mol L-1
       else
          v4_kw = 0._r8
       end if

@@ -23,7 +23,7 @@ module mo_setsox
   logical :: cloud_borne = .false.
 
   ! Inidices for species in the shared array of Henry's Law constant parameters
-  integer :: heff_id_hno3, heff_id_so2
+  integer :: heff_id_hno3, heff_id_so2, heff_id_nh3
 
 contains
 
@@ -125,9 +125,11 @@ contains
     ! Lookup Effective Henry's Law Constant parameters from the common
     ! data file read in the shared code.
     heff_id_hno3 = get_heff_index( 'HNO3' )
-    heff_id_so2  = get_heff_index( 'SO2' )
+    heff_id_so2  = get_heff_index( 'SO2'  )
+    heff_id_nh3  = get_heff_index( 'NH3'  )
 
-    has_sox = has_sox .and. (heff_id_hno3 > 0) .and. (heff_id_so2 > 0)
+    has_sox = has_sox .and. (heff_id_hno3 > 0) .and. (heff_id_so2 > 0) &
+               .and. (heff_id_nh3 > 0)
 
     if( has_sox ) then
        if (masterproc) then
@@ -262,7 +264,6 @@ contains
     real(r8), parameter :: kh2 = 8.6e5_r8           ! HO2(a) + ho2(a) -> h2o2(a) + o2
     real(r8), parameter :: kh3 = 1.e8_r8            ! HO2(a) + o2-    -> h2o2(a) + o2
     real(r8), parameter :: Ra = BOLTZMANN * AVOGADRO * M3_TO_L * PASCAL_TO_ATM ! universal constant   (atm)/(M-K)
-    real(r8), parameter :: xkw = 1.e-14_r8          ! water acidity
 
     !
     real(r8) :: xdelso4hp(ncol,pver)
@@ -500,17 +501,24 @@ contains
              !          = ((xk*xe*patm/xkw)*xnh34)/(1 + xk*ra*tz*xl*(1 + xe*hplus/xkw)
              !          = ( fact1_nh3            )/(1 + fact2_nh3  *(1 + fact3_nh3*hplus)
              !    [nh4+] = enh3*hplus
-             xk = 58._r8   *EXP( 4085._r8*work1(i) )
-             xe = 1.7e-5_r8*EXP( -4325._r8*work1(i) )
-
-             fact1_nh3 = (xk*xe*patm/xkw)*(xnh3(i,k)+xnh4(i,k))
+             ! NOTE: Algorithm modified to follow that used in wet deposition.
+             !       This essentially replaces xkw (1.0e-14) with a temperature
+             !       dependent value for the water dissociation constant, x2.
+             xk = dheff(1,heff_id_nh3) * exp( dheff(2,heff_id_nh3) * work1(i) )
+             xe = dheff(3,heff_id_nh3) * exp( dheff(4,heff_id_nh3) * work1(i) )
+             x2 = dheff(5,heff_id_nh3) * exp( dheff(6,heff_id_nh3) * work1(i) )
+             fact1_nh3 = (xk*xe*patm/x2)*(xnh3(i,k)+xnh4(i,k))
              fact2_nh3 = xk*ra*tz*xl
-             fact3_nh3 = xe/xkw
+             fact3_nh3 = xe/x2
 
              !-----------------------------------------------------------------
              !        ... h2o effects
+             ! NOTE: Algorithm modified to follow that used in wet deposition.
+             !       This essentially replaces xkw (1.0e-14) with a temperature
+             !       dependent value for the water dissociation constant, x2
+             !       (calculated above with NH4 Heff terms).
              !-----------------------------------------------------------------
-             Eh2o = xkw
+             Eh2o = x2
 
              !-----------------------------------------------------------------
              !        ... co2 effects
@@ -698,9 +706,10 @@ contains
           !-----------------------------------------------------------------
           !          ... nh3
           !-----------------------------------------------------------------
-          xk = 58._r8   *EXP( 4085._r8*work1(i) )
-          xe = 1.7e-5_r8*EXP(-4325._r8*work1(i) )
-          henh3(i,k)  = xk*(1._r8 + xe*xph(i,k)/xkw)
+          xk = dheff(1,heff_id_nh3) * exp( dheff(2,heff_id_nh3) * work1(i) )
+          xe = dheff(3,heff_id_nh3) * exp( dheff(4,heff_id_nh3) * work1(i) )
+          x2 = dheff(5,heff_id_nh3) * exp( dheff(6,heff_id_nh3) * work1(i) )
+          henh3(i,k)  = xk*(1._r8 + xe*xph(i,k)/x2)
 
           !-----------------------------------------------------------------
           !        ... o3
