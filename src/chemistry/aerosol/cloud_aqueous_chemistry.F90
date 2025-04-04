@@ -453,11 +453,12 @@ contains
 
     ! H2O2 paritioning parameters
     !
-    ! NOTE: I can't find a source for these values.
+    ! NOTE: I can't find a source for the original values.
+    !       Now using the ones from wet deposition data.
     hl_h2o2 = henrys_law_t( ncol, pver )
     hl_h2o2%type_ = HENRYS_LAW_MONOPROTIC_ACID
-    hl_h2o2%partitioning_factor_%A_ = 7.4e4_r8
-    hl_h2o2%partitioning_factor_%B_ = 6621.0_r8
+    hl_h2o2%partitioning_factor_%A_ = 8.7e4_r8
+    hl_h2o2%partitioning_factor_%B_ = 7320.0_r8
     hl_h2o2%first_dissociation_factor_%A_ = 2.2e-12_r8
     hl_h2o2%first_dissociation_factor_%B_ = -3730.0_r8
 
