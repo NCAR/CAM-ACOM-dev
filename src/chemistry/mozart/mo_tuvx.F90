@@ -1929,7 +1929,7 @@ contains
          swcldw = 1._r8
       end where
 
-      where(swaertauw .ne. 0._r8)
+      where(swcldtauw .ne. 0._r8)
          swcldg = swcldtauwg / swcldtauw
       elsewhere
          swcldg = 0._r8
