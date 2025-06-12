@@ -149,6 +149,10 @@ integer :: swaertau_idx   = -1
 integer :: swaertauw_idx  = -1
 integer :: swaertauwg_idx = -1
 
+integer :: swcldtau_idx   = -1
+integer :: swcldtauw_idx  = -1
+integer :: swcldtauwg_idx = -1
+
 character(len=4) :: diag(0:N_DIAG) =(/'    ','_d1 ','_d2 ','_d3 ','_d4 ','_d5 ','_d6 ','_d7 ','_d8 ','_d9 ','_d10'/)
 
 ! averaging time interval for zenith angle
@@ -278,6 +282,12 @@ subroutine radiation_register
    call pbuf_add_field('SWAERTAU',   'global',dtype_r8,(/pcols,pver,nswbands/), swaertau_idx)   ! shortwave tau
    call pbuf_add_field('SWAERTAUW',  'global',dtype_r8,(/pcols,pver,nswbands/), swaertauw_idx)  ! shortwave tau * w
    call pbuf_add_field('SWAERTAUWG', 'global',dtype_r8,(/pcols,pver,nswbands/), swaertauwg_idx) ! shortwave tau * w * g
+
+   ! Put the shortwave cloud optical properties into the physics buffer so
+   ! that they can be used in the photolysis code.
+   call pbuf_add_field('SWCLDTAU',   'global',dtype_r8,(/pcols,pver,nswbands/), swcldtau_idx)   ! shortwave tau
+   call pbuf_add_field('SWCLDTAUW',  'global',dtype_r8,(/pcols,pver,nswbands/), swcldtauw_idx)  ! shortwave tau * w
+   call pbuf_add_field('SWCLDTAUWG', 'global',dtype_r8,(/pcols,pver,nswbands/), swcldtauwg_idx) ! shortwave tau * w * g
 
    call rad_data_register()
 
@@ -874,6 +884,10 @@ subroutine radiation_tend( &
    real(r8), pointer, dimension(:,:,:) :: swaertauw  ! shortwave aerosol tau * w
    real(r8), pointer, dimension(:,:,:) :: swaertauwg ! shortwave aerosol tau * w * g
 
+   real(r8), pointer, dimension(:,:,:) :: swcldtau   ! shortwave cloud tau
+   real(r8), pointer, dimension(:,:,:) :: swcldtauw  ! shortwave cloud tau * w
+   real(r8), pointer, dimension(:,:,:) :: swcldtauwg ! shortwave cloud tau * w * g
+
    real(r8) :: fns(pcols,pverp)     ! net shortwave flux
    real(r8) :: fcns(pcols,pverp)    ! net clear-sky shortwave flux
    real(r8) :: fnl(pcols,pverp)     ! net longwave flux
@@ -1234,6 +1248,17 @@ subroutine radiation_tend( &
                  swaertau(:ncol,1:pver,:)   = aer_tau(:ncol,1:pver,:)
                  swaertauw(:ncol,1:pver,:)  = aer_tau_w(:ncol,1:pver,:)
                  swaertauwg(:ncol,1:pver,:) = aer_tau_w_g(:ncol,1:pver,:)
+
+                 call pbuf_get_field(pbuf, swcldtau_idx,   swcldtau)
+                 call pbuf_get_field(pbuf, swcldtauw_idx,  swcldtauw)
+                 call pbuf_get_field(pbuf, swcldtauwg_idx, swcldtauwg)
+
+                 do i = 1,nswbands
+                    swcldtau(:ncol,1:pver,i)   = c_cld_tau(i,:ncol,1:pver)
+                    swcldtauw(:ncol,1:pver,i)  = c_cld_tau_w(i,:ncol,1:pver)
+                    swcldtauwg(:ncol,1:pver,i) = c_cld_tau_w_g(i,:ncol,1:pver)
+                 end do
+
                end if
 
                call rad_rrtmg_sw( &

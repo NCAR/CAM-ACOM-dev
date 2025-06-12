@@ -85,7 +85,7 @@ module mo_tuvx
    logical :: do_aerosol = .true. ! indicates whether aerosol optical properties
                                    !   are available and should be used in radiative
                                    !   transfer calculations
-   logical :: do_clouds  = .false. ! indicates whether cloud optical properties
+   logical :: do_clouds  = .true. ! indicates whether cloud optical properties
                                    !   should be calculated and used in radiative
                                    !   transfer calculations
 
@@ -142,6 +142,9 @@ module mo_tuvx
   integer :: swaertau_idx   = -1
   integer :: swaertauw_idx  = -1
   integer :: swaertauwg_idx = -1
+  integer :: swcldtau_idx   = -1
+  integer :: swcldtauw_idx  = -1
+  integer :: swcldtauwg_idx = -1
   type (interp_type) :: interp_wgts
   real(r8) :: rrtmg_wavelength(nswbands-1)
   integer :: nwave
@@ -517,6 +520,10 @@ contains
       swaertauw_idx  = pbuf_get_index('SWAERTAUW')
       swaertauwg_idx = pbuf_get_index('SWAERTAUWG')
 
+      swcldtau_idx   = pbuf_get_index('SWCLDTAU')
+      swcldtauw_idx  = pbuf_get_index('SWCLDTAUW')
+      swcldtauwg_idx = pbuf_get_index('SWCLDTAUWG')
+
       ! Get the RRTMG wavenumber edges and convert to a wavelength center.
       !
       ! NOTE: Last band is a broadband that overlaps the other bands, so skip it.
@@ -617,9 +624,9 @@ contains
       real(r8), allocatable :: single_scattering_albedo(:,:,:) ! aerosol single scattering albedo (column, level, wavelength) [unitless]
       real(r8), allocatable :: asymmetry_factor(:,:,:)         ! aerosol asymmetry factor (column, level, wavelength) [unitless]
 
-      real(r8), allocatable :: optical_depth2(:,:,:)            ! aerosol optical depth (column, level, wavelength) [unitless]
-      real(r8), allocatable :: single_scattering_albedo2(:,:,:) ! aerosol single scattering albedo (column, level, wavelength) [unitless]
-      real(r8), allocatable :: asymmetry_factor2(:,:,:)         ! aerosol asymmetry factor (column, level, wavelength) [unitless]
+      real(r8), allocatable :: optical_depth_cld(:,:,:)            ! aerosol optical depth (column, level, wavelength) [unitless]
+      real(r8), allocatable :: single_scattering_albedo_cld(:,:,:) ! aerosol single scattering albedo (column, level, wavelength) [unitless]
+      real(r8), allocatable :: asymmetry_factor_cld(:,:,:)         ! aerosol asymmetry factor (column, level, wavelength) [unitless]
 
       if( .not. tuvx_active ) return
 
@@ -641,6 +648,9 @@ contains
          allocate( optical_depth( pcols, pver+1, tuvx%n_wavelength_bins_ ) )
          allocate( single_scattering_albedo( pcols, pver+1, tuvx%n_wavelength_bins_ ) )
          allocate( asymmetry_factor( pcols, pver+1, tuvx%n_wavelength_bins_ ) )
+         allocate( optical_depth_cld( pcols, pver+1, tuvx%n_wavelength_bins_ ) )
+         allocate( single_scattering_albedo_cld( pcols, pver+1, tuvx%n_wavelength_bins_ ) )
+         allocate( asymmetry_factor_cld( pcols, pver+1, tuvx%n_wavelength_bins_ ) )
          photo_rates(:,:,:) = 0.0_r8
 
          ! ==============================================
@@ -650,7 +660,8 @@ contains
 !!$            single_scattering_albedo, asymmetry_factor )
 
          call get_aerosol_optical_properties2( tuvx, pbuf, state%ncol, &
-                            optical_depth, single_scattering_albedo, asymmetry_factor )
+              optical_depth, single_scattering_albedo, asymmetry_factor, &
+              optical_depth_cld, single_scattering_albedo_cld, asymmetry_factor_cld )
 
          do i_col = 1, ncol
 
@@ -674,7 +685,8 @@ contains
                species_vmr, exo_column_conc, &
                pressure_delta(1:ncol,:), cloud_fraction, &
                liquid_water_content, optical_depth, &
-               single_scattering_albedo, asymmetry_factor)
+               single_scattering_albedo, asymmetry_factor, &
+               optical_depth_cld, single_scattering_albedo_cld, asymmetry_factor_cld )
 
             ! ===================================================
             ! Calculate photolysis rate constants for this column
@@ -977,12 +989,12 @@ contains
          diagnostics( i_label )%index_ = i_label
          call addfld( "tuvx_"//diagnostics( i_label )%name_, (/ 'lev' /), 'A', 'sec-1', &
                       trim(diagnostics( i_label )%name_)//' photolysis rate constant' )
-         call add_default("tuvx_"//diagnostics( i_label )%name_,3,' ')
+       !  call add_default("tuvx_"//diagnostics( i_label )%name_,3,' ')
       end do
 
       do ipht = 1, phtcnt
          call addfld('tuvcam_'//trim(rxt_tag_lst(ipht)), (/ 'lev' /), 'A', 'sec-1', 'photolysis rate constant' )
-         call add_default('tuvcam_'//trim(rxt_tag_lst(ipht)), 3,' ')
+        ! call add_default('tuvcam_'//trim(rxt_tag_lst(ipht)), 3,' ')
       end do
 
    end subroutine initialize_diagnostics
@@ -1400,6 +1412,7 @@ contains
       ! get an updater for the cloud radiator
       ! =====================================
       do_clouds = .not. disable_clouds
+
       host_radiator => radiators%get_radiator( "clouds" )
       this%radiators_( RADIATOR_INDEX_CLOUDS ) = &
          this%core_%get_updater( host_radiator, found )
@@ -1599,7 +1612,8 @@ contains
    !-----------------------------------------------------------------------
    subroutine set_radiator_profiles( this, i_col, ncol, fixed_species_conc, species_vmr, &
       exo_column_conc, delta_pressure, cloud_fraction, liquid_water_content, &
-      optical_depth, single_scattering_albedo, asymmetry_factor )
+      optical_depth, single_scattering_albedo, asymmetry_factor, &
+      optical_depth_cld, single_scattering_albedo_cld, asymmetry_factor_cld)
 
       use chem_mods, only : gas_pcnst, & ! number of non-fixed species
                             nfs,       & ! number of fixed species
@@ -1622,6 +1636,10 @@ contains
       real(r8),        intent(in)    :: optical_depth(pcols, pver+1, this%n_wavelength_bins_) ! aerosol optical depth [unitless]
       real(r8),        intent(in)    :: single_scattering_albedo(pcols, pver+1, this%n_wavelength_bins_) ! single scattering albedo [unitless]
       real(r8),        intent(in)    :: asymmetry_factor(pcols, pver+1, this%n_wavelength_bins_) ! asymmetry factor [unitless]
+
+      real(r8),        intent(in)    :: optical_depth_cld(pcols, pver+1, this%n_wavelength_bins_) ! aerosol optical depth [unitless]
+      real(r8),        intent(in)    :: single_scattering_albedo_cld(pcols, pver+1, this%n_wavelength_bins_) ! single scattering albedo [unitless]
+      real(r8),        intent(in)    :: asymmetry_factor_cld(pcols, pver+1, this%n_wavelength_bins_) ! asymmetry factor [unitless]
 
       integer  :: i_level
       real(r8) :: tmp(pver)
@@ -1714,26 +1732,13 @@ contains
       ! cloud profile
       ! =============
       if( do_clouds ) then
-         ! ===================================================
-         ! estimate cloud optical depth as:
-         !    liquid_water_path * 0.155 * cloud_fraction^(1.5)
-         ! ===================================================
-         associate( clouds => cloud_fraction(i_col,:) )
-            where( clouds(:) /= 0.0_r8 )
-               tmp(:) = ( rgrav * liquid_water_content(i_col,:) * delta_pressure(i_col,:) &
-                  * 1.0e3_r8 / clouds(:) ) * 0.155_r8 * clouds(:)**1.5_r8
-            elsewhere
-               tmp(:) = 0.0_r8
-            end where
-         end associate
-         do i_level = 1, pver
-            tau(i_level,:) = tmp(pver-i_level+1)
-         end do
-         tau(pver+1,:) = 0.0_r8
-         call this%radiators_( RADIATOR_INDEX_CLOUDS )%update( optical_depths = tau )
+         call this%radiators_( RADIATOR_INDEX_CLOUDS )%update( &
+            optical_depths            = optical_depth_cld(i_col,:,:), &
+            single_scattering_albedos = single_scattering_albedo_cld(i_col,:,:), &
+            asymmetry_factors         = asymmetry_factor_cld(i_col,:,:) )
       end if
 
-   end subroutine set_radiator_profiles
+    end subroutine set_radiator_profiles
 
 !================================================================================================
 
@@ -1742,7 +1747,7 @@ contains
    !   columns from the aerosol package
    !-----------------------------------------------------------------------
    subroutine get_aerosol_optical_properties( this, state, pbuf, optical_depth, &
-      single_scattering_albedo, asymmetry_factor )
+        single_scattering_albedo, asymmetry_factor )
 
       use aer_rad_props,    only : aer_rad_props_sw
       use mo_util,          only : rebin
@@ -1856,7 +1861,9 @@ contains
 
 !================================================================================================
 
-   subroutine get_aerosol_optical_properties2(this, pbuf, ncol, optical_depth, single_scattering_albedo, asymmetry_factor)
+   subroutine get_aerosol_optical_properties2(this, pbuf, ncol, &
+        optical_depth, single_scattering_albedo, asymmetry_factor, &
+        optical_depth_cld, single_scattering_albedo_cld, asymmetry_factor_cld)
 
       class(tuvx_ptr), intent(in) :: this  ! TUV-x calculator
       type(physics_buffer_desc), pointer :: pbuf(:)
@@ -1866,9 +1873,17 @@ contains
       real(r8), intent(out) :: single_scattering_albedo(pcols,pver+1,this%n_wavelength_bins_) ! aerosol single scattering albedo [unitless]
       real(r8), intent(out) :: asymmetry_factor(pcols,pver+1,this%n_wavelength_bins_) ! aerosol asymmetry factor [unitless]
 
+      real(r8), intent(out) :: optical_depth_cld(pcols,pver+1,this%n_wavelength_bins_) ! aerosol optical depth [unitless]
+      real(r8), intent(out) :: single_scattering_albedo_cld(pcols,pver+1,this%n_wavelength_bins_) ! aerosol single scattering albedo [unitless]
+      real(r8), intent(out) :: asymmetry_factor_cld(pcols,pver+1,this%n_wavelength_bins_) ! aerosol asymmetry factor [unitless]
+
       real(r8), pointer, dimension(:,:,:) :: swaertau   ! shortwave aerosol tau
       real(r8), pointer, dimension(:,:,:) :: swaertauw  ! shortwave aerosol tau * w
       real(r8), pointer, dimension(:,:,:) :: swaertauwg ! shortwave aerosol tau * w * g
+
+      real(r8), pointer, dimension(:,:,:) :: swcldtau   ! shortwave aerosol tau
+      real(r8), pointer, dimension(:,:,:) :: swcldtauw  ! shortwave aerosol tau * w
+      real(r8), pointer, dimension(:,:,:) :: swcldtauwg ! shortwave aerosol tau * w * g
 
       real(r8) :: tauaer(pcols, pver, nwave)
       real(r8) :: waer(pcols, pver, nwave)
@@ -1877,11 +1892,22 @@ contains
       real(r8) :: swaerw(pcols, pver, nswbands)
       real(r8) :: swaerg(pcols, pver, nswbands)
 
+      real(r8) :: taucld(pcols, pver, nwave)
+      real(r8) :: wcld(pcols, pver, nwave)
+      real(r8) :: gcld(pcols, pver, nwave)
+
+      real(r8) :: swcldw(pcols, pver, nswbands)
+      real(r8) :: swcldg(pcols, pver, nswbands)
+
       integer :: i,k, kk
 
       call pbuf_get_field(pbuf, swaertau_idx,   swaertau)
       call pbuf_get_field(pbuf, swaertauw_idx,  swaertauw)
       call pbuf_get_field(pbuf, swaertauwg_idx, swaertauwg)
+
+      call pbuf_get_field(pbuf, swcldtau_idx,   swcldtau)
+      call pbuf_get_field(pbuf, swcldtauw_idx,  swcldtauw)
+      call pbuf_get_field(pbuf, swcldtauwg_idx, swcldtauwg)
 
       ! Need to convert tau*w to w and tau*w*g to g for the radiation code.
       where(swaertau .ne. 0._r8)
@@ -1896,9 +1922,26 @@ contains
          swaerg = 0._r8
       end where
 
+
+      where(swcldtau .ne. 0._r8)
+         swcldw = swcldtauw / swcldtau
+      elsewhere
+         swcldw = 1._r8
+      end where
+
+      where(swaertauw .ne. 0._r8)
+         swcldg = swcldtauwg / swcldtauw
+      elsewhere
+         swcldg = 0._r8
+      end where
+
       optical_depth = 0._r8
       single_scattering_albedo = 0._r8
       asymmetry_factor = 0._r8
+
+      optical_depth_cld = 0._r8
+      single_scattering_albedo_cld = 0._r8
+      asymmetry_factor_cld = 0._r8
 
       ! The CESM wavelengths to the wavelength grid used by TUV.
       do i = 1, ncol
@@ -1907,11 +1950,19 @@ contains
             call lininterp(swaerw(i,k,1:nswbands-1), nswbands-1, waer(i,k,:), nwave, interp_wgts)
             call lininterp(swaerg(i,k,1:nswbands-1), nswbands-1, gaer(i,k,:), nwave, interp_wgts)
 
+            call lininterp(swcldtau(i,k,1:nswbands-1), nswbands-1, taucld(i,k,:), nwave, interp_wgts)
+            call lininterp(swcldw(i,k,1:nswbands-1), nswbands-1, wcld(i,k,:), nwave, interp_wgts)
+            call lininterp(swcldg(i,k,1:nswbands-1), nswbands-1, gcld(i,k,:), nwave, interp_wgts)
+
             ! invert the vertical dimension
             kk = pver+1 - k
             optical_depth(i,kk,:) = tauaer(i,k,:)
             single_scattering_albedo(i,kk,:) = waer(i,k,:)
             asymmetry_factor(i,kk,:) = gaer(i,k,:)
+
+            optical_depth_cld(i,kk,:) = taucld(i,k,:)
+            single_scattering_albedo_cld(i,kk,:) = wcld(i,k,:)
+            asymmetry_factor_cld(i,kk,:) = gcld(i,k,:)
          end do
       end do
 
