@@ -1452,6 +1452,96 @@
             }
          },
          {
+            "name": "jh2so4",
+            "__reaction": "H2SO4 + hv -> SO3 + H2O",
+            "cross section": {
+               "type": "base",
+               "data": {
+                 "default value": 0.0,
+                 "point values": [
+                   { "wavelength": 121.50, "value":      6.3e-17 },
+                   { "wavelength":  525.0, "value":     1.43e-26 },
+                   { "wavelength":  625.0, "value":   1.8564e-25 },
+                   { "wavelength":  725.0, "value": 3.086999e-24 }
+                 ]
+               }
+             },
+            "quantum yield": {
+               "type": "H2SO4 Mills",
+               "netcdf files": [
+                 "data/quantum_yields/H2SO4_mills.nc"
+               ],
+               "parameterized wavelengths": [
+                 525,
+                 625,
+                 725
+               ],
+               "collision interval s": [
+                 1.1e-9,
+                 8.9e-9,
+                 1.7e-7
+               ],
+               "molecular diameter m": 4.18e-10,
+               "molecular weight kg mol-1": 98.078479e-3
+             }
+         },
+         {
+            "name": "jocs",
+            "__reaction": "OCS + hv -> S + CO",
+            "cross section": {
+               "type": "base",
+               "netcdf files": [
+                  { "file path": "data/cross_sections/OCS_1.nc" }
+               ]
+            },
+            "quantum yield": {
+               "type": "base",
+               "constant value": 1.0
+            }
+         },
+         {
+            "name": "jso",
+            "__reaction": "SO + hv -> S + O",
+            "cross section": {
+               "type": "base",
+               "netcdf files": [
+                  { "file path": "data/cross_sections/SO_1.nc" }
+               ]
+            },
+            "quantum yield": {
+               "type": "base",
+               "constant value": 1.0
+            }
+         },
+         {
+            "name": "jso2",
+            "__reaction": "SO2 + hv -> SO + O",
+            "cross section": {
+               "type": "base",
+               "netcdf files": [
+                  { "file path": "data/cross_sections/SO2_Mills.nc" }
+               ]
+            },
+            "quantum yield": {
+               "type": "base",
+               "constant value": 1.0
+            }
+         },
+         {
+            "name": "jso3",
+            "__reaction": "SO3 + hv -> SO2 + O",
+            "cross section": {
+               "type": "base",
+               "netcdf files": [
+                  { "file path": "data/cross_sections/SO3_1.nc" }
+               ]
+            },
+            "quantum yield": {
+               "type": "base",
+               "constant value": 1.0
+            }
+         },
+         {
             "name": "jno_i",
             "__reaction": "NO + hv -> NOp + e",
             "cross section": {

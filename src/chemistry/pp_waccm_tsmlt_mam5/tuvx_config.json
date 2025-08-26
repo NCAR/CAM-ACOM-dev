@@ -1775,8 +1775,8 @@
       ]
    },
    "__CAM options": {
-     "disable clouds": true,
-     "disable aerosols": true,
+     "disable clouds": false,
+     "disable aerosols": false,
      "aliasing": {
        "default matching": "backup",
        "pairs": [

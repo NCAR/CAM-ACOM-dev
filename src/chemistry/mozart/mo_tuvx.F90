@@ -82,10 +82,10 @@ module mo_tuvx
    integer :: index_NO = 0 ! index for NO in concentration array
 
    ! Information needed to access aerosol and cloud optical properties
-   logical :: do_aerosol = .true. ! indicates whether aerosol optical properties
+   logical :: do_aerosols = .true. ! indicates whether aerosol optical properties
                                    !   are available and should be used in radiative
                                    !   transfer calculations
-   logical :: do_clouds  = .true. ! indicates whether cloud optical properties
+   logical :: do_clouds  = .true.  ! indicates whether cloud optical properties
                                    !   should be calculated and used in radiative
                                    !   transfer calculations
 
@@ -878,7 +878,7 @@ contains
          write(iulog,*) "  - without OpenMP support"
 #endif
          write(iulog,*) "  - with configuration file: '"//trim( tuvx_config_path )//"'"
-         if( do_aerosol ) then
+         if( do_aerosols ) then
             write(iulog,*) "  - with on-line aerosols"
          else
             write(iulog,*) "  - without on-line aerosols"
@@ -1393,29 +1393,22 @@ contains
       ! =================
 
       ! ====================================================================
-      ! determine if aerosol optical properties will be available, and if so
-      ! intialize the aerosol optics module
+      ! get an updater for the aerosols
       ! ====================================================================
-      call rad_cnst_get_info( 0, nmodes = n_modes )
-      if( n_modes > 0 .and. .not. do_aerosol .and. .not. disable_aerosols ) then
-         do_aerosol = .true.
-         ! TODO update to use new aerosol_optics class
-         ! call modal_aer_opt_init( )
-      end if
+      do_aerosols = .not. disable_aerosols
+
       host_radiator => radiators%get_radiator( "aerosol" )
-      this%radiators_( RADIATOR_INDEX_AEROSOL ) = &
-         this%core_%get_updater( host_radiator, found )
+      this%radiators_( RADIATOR_INDEX_AEROSOL ) = this%core_%get_updater( host_radiator, found )
       call assert( 675200430, found )
       nullify( host_radiator )
 
       ! =====================================
-      ! get an updater for the cloud radiator
+      ! get an updater for the clouds
       ! =====================================
       do_clouds = .not. disable_clouds
 
       host_radiator => radiators%get_radiator( "clouds" )
-      this%radiators_( RADIATOR_INDEX_CLOUDS ) = &
-         this%core_%get_updater( host_radiator, found )
+      this%radiators_( RADIATOR_INDEX_CLOUDS ) = this%core_%get_updater( host_radiator, found )
       call assert( 993715720, found )
       nullify( host_radiator )
 
@@ -1721,7 +1714,7 @@ contains
       ! ===============
       ! aerosol profile
       ! ===============
-      if( do_aerosol ) then
+      if( do_aerosols ) then
          call this%radiators_( RADIATOR_INDEX_AEROSOL )%update( &
             optical_depths            = optical_depth(i_col,:,:), &
             single_scattering_albedos = single_scattering_albedo(i_col,:,:), &
@@ -1781,7 +1774,7 @@ contains
       ! ===================================================================
       ! return default optical properties if no aerosol module is available
       ! ===================================================================
-      if( .not. do_aerosol ) then
+      if( .not. do_aerosols ) then
          optical_depth(:,:,:) = 0.0_r8
          single_scattering_albedo(:,:,:) = 0.0_r8
          asymmetry_factor(:,:,:) = 0.0_r8
