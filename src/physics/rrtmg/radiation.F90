@@ -1238,7 +1238,7 @@ subroutine radiation_tend( &
                rd%aer_tau400(:ncol,:)       = aer_tau(:ncol,:,idx_sw_diag+1)
                rd%aer_tau700(:ncol,:)       = aer_tau(:ncol,:,idx_sw_diag-1)
 
-               ! Save aerosol optical properties in the physics puffer for
+               ! Save aerosol optical properties in the physics buffer for
                ! photolysis, but only for the climate call.
                if (icall .eq. 0) then
                  call pbuf_get_field(pbuf, swaertau_idx,   swaertau)

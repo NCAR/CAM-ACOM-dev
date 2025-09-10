@@ -82,10 +82,10 @@ module mo_tuvx
    integer :: index_NO = 0 ! index for NO in concentration array
 
    ! Information needed to access aerosol and cloud optical properties
-   logical :: do_aerosols = .true. ! indicates whether aerosol optical properties
+   logical :: do_aerosols = .false. ! indicates whether aerosol optical properties
                                    !   are available and should be used in radiative
                                    !   transfer calculations
-   logical :: do_clouds  = .true.  ! indicates whether cloud optical properties
+   logical :: do_clouds  = .false.  ! indicates whether cloud optical properties
                                    !   should be calculated and used in radiative
                                    !   transfer calculations
 
@@ -96,7 +96,7 @@ module mo_tuvx
                                        !   ionization rates
 
    ! Information needed to do special NO photolysis rate calculation
-   logical :: do_jno     = .true. ! Indicates whether to calculate jno
+   logical :: do_jno     = .false. ! Indicates whether to calculate jno
    integer :: jno_index  = 0       ! Index in tuvx_ptr::photo_rates_ array for jno
 
    ! Cutoff solar zenith angle for doing photolysis rate calculations [degrees]
@@ -139,12 +139,12 @@ module mo_tuvx
    character(len=cl) :: tuvx_config_path = 'NONE'  ! absolute path to TUVX configuration file
    logical, protected :: tuvx_active = .false.
 
-  integer :: swaertau_idx   = -1
-  integer :: swaertauw_idx  = -1
-  integer :: swaertauwg_idx = -1
-  integer :: swcldtau_idx   = -1
-  integer :: swcldtauw_idx  = -1
-  integer :: swcldtauwg_idx = -1
+  integer :: swaertau_idx   = -1       ! shortwave aerosol extinction optical depth. tau
+  integer :: swaertauw_idx  = -1       ! shortwave aerosol extinction optical depth * single scattering albedo. tau*w
+  integer :: swaertauwg_idx = -1       ! shortwave aerosol extinction optical depth * single scattering albedo * asymmetry parameter. tau*w*g
+  integer :: swcldtau_idx   = -1       ! shortwave cloud extinction optical depth. tau
+  integer :: swcldtauw_idx  = -1       ! shortwave cloud extinction optical depth * single scattering albedo. tau*w 
+  integer :: swcldtauwg_idx = -1       ! shortwave cloud extinction optical depth * single scattering albedo * asymmetry parameter. tau*w*g
   type (interp_type) :: interp_wgts
   real(r8) :: rrtmg_wavelength(nswbands-1)
   integer :: nwave
@@ -300,9 +300,9 @@ contains
       integer :: i
       real(r8) :: nanval
 
-      real(r8) :: wvl_low(nswbands)
-      real(r8) :: wvl_high(nswbands)
-      real(r8), allocatable :: wc(:)
+      real(r8) :: wavelength_low(nswbands) !RRTMG wavenumber low edge
+      real(r8) :: wavelength_high(nswbands) !RRTMG wavenumber high edge
+      real(r8), allocatable :: wc(:) ! TUVx wavelengths at bin centers
 
       if( .not. tuvx_active ) return
       if( is_initialized ) return
@@ -448,6 +448,7 @@ contains
       deallocate( cam_grids     )
       deallocate( cam_profiles  )
       deallocate( cam_radiators )
+      deallocate( wavelength )
 
       ! =============================================
       ! Get index info for CAM species concentrations
@@ -516,10 +517,14 @@ contains
                        trim( to_char( number_of_heating_rates ) )//"." ) )
 
       ! physic buffer fields for aerosol optical properties.
-      swaertau_idx   = pbuf_get_index('SWAERTAU')
-      swaertauw_idx  = pbuf_get_index('SWAERTAUW')
-      swaertauwg_idx = pbuf_get_index('SWAERTAUWG')
+      ! Get the aerosol optical properties from radiation code. 
+      ! The optical properties from radiation code is in the form of tau*w*g (extinction optical depth * single scattering albedo * asymmetry parameter)
+      ! Individual parameters (extinction optical depth, single scattering albedo, asymmetry parameter) need to be derived to be used in TUVx
+      swaertau_idx   = pbuf_get_index('SWAERTAU') ! optical depth
+      swaertauw_idx  = pbuf_get_index('SWAERTAUW') ! optical depth * single scattering albedo
+      swaertauwg_idx = pbuf_get_index('SWAERTAUWG') ! optical depth * single scattering albedo * asymmetry parameter
 
+      ! get the clouds optical properties from radiation code
       swcldtau_idx   = pbuf_get_index('SWCLDTAU')
       swcldtauw_idx  = pbuf_get_index('SWCLDTAUW')
       swcldtauwg_idx = pbuf_get_index('SWCLDTAUWG')
@@ -527,8 +532,8 @@ contains
       ! Get the RRTMG wavenumber edges and convert to a wavelength center.
       !
       ! NOTE: Last band is a broadband that overlaps the other bands, so skip it.
-      call get_sw_spectral_boundaries(wvl_low, wvl_high, "nm")
-      rrtmg_wavelength = (wvl_low(1:nswbands-1) + wvl_high(1:nswbands-1)) / 2._r8
+      call get_sw_spectral_boundaries(wavelength_low, wavelength_high, "nm")
+      rrtmg_wavelength = (wavelength_low(1:nswbands-1) + wavelength_high(1:nswbands-1)) / 2._r8
 
       ! Calculate weights needed to interpolate from the RRTMG wavelengths to the
       ! radxfr wavelengths.
@@ -656,10 +661,9 @@ contains
          ! ==============================================
          ! set aerosol optical properties for all columns
          ! ==============================================
-!!$         call get_aerosol_optical_properties( tuvx, state, pbuf, optical_depth, &
-!!$            single_scattering_albedo, asymmetry_factor )
 
-         call get_aerosol_optical_properties2( tuvx, pbuf, state%ncol, &
+
+         call get_aerosol_optical_properties( tuvx, pbuf, state%ncol, &
               optical_depth, single_scattering_albedo, asymmetry_factor, &
               optical_depth_cld, single_scattering_albedo_cld, asymmetry_factor_cld )
 
@@ -989,12 +993,10 @@ contains
          diagnostics( i_label )%index_ = i_label
          call addfld( "tuvx_"//diagnostics( i_label )%name_, (/ 'lev' /), 'A', 'sec-1', &
                       trim(diagnostics( i_label )%name_)//' photolysis rate constant' )
-       !  call add_default("tuvx_"//diagnostics( i_label )%name_,3,' ')
       end do
 
       do ipht = 1, phtcnt
          call addfld('tuvcam_'//trim(rxt_tag_lst(ipht)), (/ 'lev' /), 'A', 'sec-1', 'photolysis rate constant' )
-        ! call add_default('tuvcam_'//trim(rxt_tag_lst(ipht)), 3,' ')
       end do
 
    end subroutine initialize_diagnostics
@@ -1739,122 +1741,8 @@ contains
    ! Updates working arrays of aerosol optical properties for all
    !   columns from the aerosol package
    !-----------------------------------------------------------------------
-   subroutine get_aerosol_optical_properties( this, state, pbuf, optical_depth, &
-        single_scattering_albedo, asymmetry_factor )
 
-      use aer_rad_props,    only : aer_rad_props_sw
-      use mo_util,          only : rebin
-      use physics_types,    only : physics_state
-      use physics_buffer,   only : physics_buffer_desc
-      use ppgrid,           only : pcols          ! maximum number of columns
-      use radconstants,     only : nswbands, &    ! Number of CAM shortwave radiation bands
-         get_sw_spectral_boundaries
-
-      class(tuvx_ptr),                    intent(inout) :: this  ! TUV-x calculator
-      type(physics_state),       target,  intent(in)    :: state
-      type(physics_buffer_desc), pointer, intent(inout) :: pbuf(:)
-      real(r8), intent(out) :: optical_depth(pcols,pver+1,this%n_wavelength_bins_) ! aerosol optical depth [unitless]
-      real(r8), intent(out) :: single_scattering_albedo(pcols,pver+1,this%n_wavelength_bins_) ! aerosol single scattering albedo [unitless]
-      real(r8), intent(out) :: asymmetry_factor(pcols,pver+1,this%n_wavelength_bins_) ! aerosol asymmetry factor [unitless]
-
-      real(r8) :: wavelength_edges(nswbands+1)       ! CAM radiation wavelength grid edges [nm]
-      real(r8) :: aer_tau    (pcols,0:pver,nswbands) ! aerosol extinction optical depth
-      real(r8) :: aer_tau_w  (pcols,0:pver,nswbands) ! aerosol single scattering albedo * tau
-      real(r8) :: aer_tau_w_g(pcols,0:pver,nswbands) ! aerosol assymetry parameter * w * tau
-      real(r8) :: aer_tau_w_f(pcols,0:pver,nswbands) ! aerosol forward scattered fraction * w * tau
-      real(r8) :: low_bound(nswbands)  ! lower bound of CAM wavenumber bins
-      real(r8) :: high_bound(nswbands) ! upper bound of CAM wavenumber bins
-      integer  :: n_night              ! number of night columns
-      integer  :: idx_night(pcols)     ! indices of night columns
-      integer  :: n_tuvx_bins          ! number of TUV-x wavelength bins
-      integer  :: i_col, i_level       ! column and level indices
-
-      integer :: cnt, imin(1), lmin
-
-      ! ===================================================================
-      ! return default optical properties if no aerosol module is available
-      ! ===================================================================
-      if( .not. do_aerosols ) then
-         optical_depth(:,:,:) = 0.0_r8
-         single_scattering_albedo(:,:,:) = 0.0_r8
-         asymmetry_factor(:,:,:) = 0.0_r8
-         return
-      end if
-
-      ! TODO just assume all daylight columns for now
-      !      can adjust later if necessary
-      n_night = 0
-      idx_night(:) = 0
-
-      ! ===========================================================
-      ! get aerosol optical properties on native CAM radiation grid
-      ! ===========================================================
-      call aer_rad_props_sw( 0, state, pbuf, n_night, idx_night, &
-         aer_tau, aer_tau_w, aer_tau_w_g, aer_tau_w_f )
-
-      ! =========================================================================
-      ! Convert CAM wavenumber grid to wavelength grid and re-order optics arrays
-      ! NOTE: CAM wavenumber grid is continuous and increasing, except that the
-      !       last bin should be moved to the just before the first bin (!?!)
-      ! =========================================================================
-      call get_sw_spectral_boundaries( low_bound, high_bound, 'nm' )
-      wavelength_edges(1:nswbands-1) = low_bound( nswbands-1:1:-1)
-      wavelength_edges(nswbands    ) = low_bound( nswbands       )
-      wavelength_edges(nswbands+1  ) = high_bound(nswbands       )
-      call reorder_optics_array(     aer_tau )
-      call reorder_optics_array(   aer_tau_w )
-      call reorder_optics_array( aer_tau_w_g )
-
-      ! =============================================================
-      ! regrid optical properties to TUV-x wavelength and height grid
-      ! =============================================================
-      ! TODO is this the correct regridding scheme to use?
-      ! FVITT -- optical props are zero for wavelengths shorter than then RRTMG bands -- < 200 nm ???
-      imin = minloc(wavelength_edges)
-      lmin = imin(1)
-      cnt = count(this%wavelength_edges_ < minval(wavelength_edges))
-
-      n_tuvx_bins = this%n_wavelength_bins_
-      do i_col = 1, pcols
-         do i_level = 1, pver + 1
-            call rebin(nswbands, n_tuvx_bins, wavelength_edges, this%wavelength_edges_, &
-               aer_tau(i_col,pver+1-i_level,:), optical_depth(i_col,i_level,:))
-            call rebin(nswbands, n_tuvx_bins, wavelength_edges, this%wavelength_edges_, &
-               aer_tau_w(i_col,pver+1-i_level,:), single_scattering_albedo(i_col,i_level,:))
-            call rebin(nswbands, n_tuvx_bins, wavelength_edges, this%wavelength_edges_, &
-               aer_tau_w_g(i_col,pver+1-i_level,:), asymmetry_factor(i_col,i_level,:))
-
-            ! for wavelengths < 200 nm
-            optical_depth(i_col,i_level,1:cnt) = aer_tau(i_col,pver+1-i_level,lmin)
-            single_scattering_albedo(i_col,i_level,1:cnt) = aer_tau_w(i_col,pver+1-i_level,lmin)
-            asymmetry_factor(i_col,i_level,1:cnt) = aer_tau_w_g(i_col,pver+1-i_level,lmin)
-
-         end do
-      end do
-
-      ! ================================================================
-      ! back-calculate the single scattering albedo and asymmetry factor
-      ! ================================================================
-      associate( tau   => optical_depth, &
-                 omega => single_scattering_albedo, &
-                 g     => asymmetry_factor )
-         where(omega > 0.0_r8 .and. g > 0.0_r8)
-            g = g / omega
-         elsewhere
-            g = 0.0_r8
-         end where
-         where(tau > 0.0_r8 .and. omega > 0.0_r8)
-            omega = omega / tau
-         elsewhere
-            omega = 0.0_r8
-         end where
-      end associate
-
-   end subroutine get_aerosol_optical_properties
-
-!================================================================================================
-
-   subroutine get_aerosol_optical_properties2(this, pbuf, ncol, &
+   subroutine get_aerosol_optical_properties(this, pbuf, ncol, &
         optical_depth, single_scattering_albedo, asymmetry_factor, &
         optical_depth_cld, single_scattering_albedo_cld, asymmetry_factor_cld)
 
@@ -1870,27 +1758,27 @@ contains
       real(r8), intent(out) :: single_scattering_albedo_cld(pcols,pver+1,this%n_wavelength_bins_) ! aerosol single scattering albedo [unitless]
       real(r8), intent(out) :: asymmetry_factor_cld(pcols,pver+1,this%n_wavelength_bins_) ! aerosol asymmetry factor [unitless]
 
-      real(r8), pointer, dimension(:,:,:) :: swaertau   ! shortwave aerosol tau
-      real(r8), pointer, dimension(:,:,:) :: swaertauw  ! shortwave aerosol tau * w
-      real(r8), pointer, dimension(:,:,:) :: swaertauwg ! shortwave aerosol tau * w * g
+      real(r8), pointer, dimension(:,:,:) :: swaertau   ! shortwave aerosol tau (extinction optical depth)
+      real(r8), pointer, dimension(:,:,:) :: swaertauw  ! shortwave aerosol tau * w (extinction optical depth * single scattering albedo)
+      real(r8), pointer, dimension(:,:,:) :: swaertauwg ! shortwave aerosol tau * w * g (extinction optical depth * single scattering albedo * asymmetry parameter)
 
-      real(r8), pointer, dimension(:,:,:) :: swcldtau   ! shortwave aerosol tau
-      real(r8), pointer, dimension(:,:,:) :: swcldtauw  ! shortwave aerosol tau * w
-      real(r8), pointer, dimension(:,:,:) :: swcldtauwg ! shortwave aerosol tau * w * g
+      real(r8), pointer, dimension(:,:,:) :: swcldtau   ! shortwave cloud tau (extinction optical depth)
+      real(r8), pointer, dimension(:,:,:) :: swcldtauw  ! shortwave cloud tau * w  (extinction optical depth * single scattering albedo)
+      real(r8), pointer, dimension(:,:,:) :: swcldtauwg ! shortwave cloud tau * w * g (extinction optical depth * single scattering albedo * asymmetry parameter)
 
-      real(r8) :: tauaer(pcols, pver, nwave)
-      real(r8) :: waer(pcols, pver, nwave)
-      real(r8) :: gaer(pcols, pver, nwave)
+      real(r8) :: tauaer(pcols, pver, nwave) ! aerosol optical depth on tuvx wavelength band
+      real(r8) :: waer(pcols, pver, nwave) ! aerosol single scattering albedo on tuvx wavelength band
+      real(r8) :: gaer(pcols, pver, nwave) ! aerosol asymmetry factor on tuvx wavelength band
 
-      real(r8) :: swaerw(pcols, pver, nswbands)
-      real(r8) :: swaerg(pcols, pver, nswbands)
+      real(r8) :: swaerw(pcols, pver, nswbands) ! aerosol single scattering albedo on radiation wavelength band 
+      real(r8) :: swaerg(pcols, pver, nswbands) ! aerosol asymmetry factor on radiation wavelength band
 
-      real(r8) :: taucld(pcols, pver, nwave)
-      real(r8) :: wcld(pcols, pver, nwave)
-      real(r8) :: gcld(pcols, pver, nwave)
+      real(r8) :: taucld(pcols, pver, nwave) ! cloud optical depth on tuvx wavelength band
+      real(r8) :: wcld(pcols, pver, nwave) ! cloud single scattering albedo on tuvx wavelength band
+      real(r8) :: gcld(pcols, pver, nwave) ! cloud asymmetry factor on tuvx wavelength band
 
-      real(r8) :: swcldw(pcols, pver, nswbands)
-      real(r8) :: swcldg(pcols, pver, nswbands)
+      real(r8) :: swcldw(pcols, pver, nswbands) ! cloud single scattering albedo on radiation wavelength band
+      real(r8) :: swcldg(pcols, pver, nswbands) ! cloud asymmetry factor on radiation wavelength band
 
       integer :: i,k, kk
 
@@ -1902,7 +1790,7 @@ contains
       call pbuf_get_field(pbuf, swcldtauw_idx,  swcldtauw)
       call pbuf_get_field(pbuf, swcldtauwg_idx, swcldtauwg)
 
-      ! Need to convert tau*w to w and tau*w*g to g for the radiation code.
+      ! derive three individual parameters. Need to convert tau*w to w and tau*w*g to g for the radiation code.
       where(swaertau .ne. 0._r8)
          swaerw = swaertauw / swaertau
       elsewhere
@@ -1937,6 +1825,10 @@ contains
       asymmetry_factor_cld = 0._r8
 
       ! The CESM wavelengths to the wavelength grid used by TUV.
+      ! The code linearly interpolate the aerosol properties from the RRTMG band to the TUVx wavelength grid.
+      ! For wavelength < 200nm, the code copies the aerosol properties at the lowest edge of the RRTMG grid (~200nm) into all the TUV-x bins below 200 nm.
+      ! This technique is called constant extrapolation or nearest-neighbor fill.
+      ! The physical assumption is that the optical properties of aerosols don't change dramatically at these very short wavelengths.
       do i = 1, ncol
          do k = 1, pver
             call lininterp(swaertau(i,k,1:nswbands-1), nswbands-1, tauaer(i,k,:), nwave, interp_wgts)
@@ -1947,7 +1839,7 @@ contains
             call lininterp(swcldw(i,k,1:nswbands-1), nswbands-1, wcld(i,k,:), nwave, interp_wgts)
             call lininterp(swcldg(i,k,1:nswbands-1), nswbands-1, gcld(i,k,:), nwave, interp_wgts)
 
-            ! invert the vertical dimension
+            ! invert the vertical dimension to match with TUVx (TUV-x heights are "bottom-up")
             kk = pver+1 - k
             optical_depth(i,kk,:) = tauaer(i,k,:)
             single_scattering_albedo(i,kk,:) = waer(i,k,:)
@@ -1959,7 +1851,7 @@ contains
          end do
       end do
 
-   end subroutine get_aerosol_optical_properties2
+   end subroutine get_aerosol_optical_properties
 
 !================================================================================================
 

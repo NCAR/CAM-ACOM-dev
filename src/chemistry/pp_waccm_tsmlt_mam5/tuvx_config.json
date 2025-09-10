@@ -1673,7 +1673,7 @@
                "data": {
                  "default value": 0.0,
                  "point values": [
-                   { "wavelength": 121.50, "value":      6.3e-17 },
+                   { "wavelength": 121.65, "value":      6.3e-17 },
                    { "wavelength":  525.0, "value":     1.43e-26 },
                    { "wavelength":  625.0, "value":   1.8564e-25 },
                    { "wavelength":  725.0, "value": 3.086999e-24 }
@@ -1763,7 +1763,7 @@
                "data": {
                   "default value": 0.0,
                   "point values": [
-                     { "wavelength": 121.50, "value": 2.0e-18 }
+                     { "wavelength": 121.65, "value": 2.0e-18 }
                   ]
                }
             },
@@ -1775,8 +1775,6 @@
       ]
    },
    "__CAM options": {
-     "disable clouds": false,
-     "disable aerosols": false,
      "aliasing": {
        "default matching": "backup",
        "pairs": [

@@ -823,12 +823,12 @@ contains
           !-----------------------------------------------------------------
           !     ... compute eff_alb and cld_mult -- needs to be before jlong
           !-----------------------------------------------------------------
-          !call cloud_mod( zen_angle(i), cld_line, lwc_line, fac1, srf_alb(i), &
-          !                eff_alb, cld_mult )
-          !cld_mult(:) = esfact * cld_mult(:)
+          call cloud_mod( zen_angle(i), cld_line, lwc_line, fac1, srf_alb(i), &
+                          eff_alb, cld_mult )
+          cld_mult(:) = esfact * cld_mult(:)
 
           ! Clear Sky
-          cld_mult(:) = 1._r8
+          ! cld_mult(:) = 1._r8
 
           !-----------------------------------------------------------------
           !	... long wave length component
