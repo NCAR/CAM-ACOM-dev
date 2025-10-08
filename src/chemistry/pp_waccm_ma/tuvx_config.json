@@ -1459,7 +1459,7 @@
                "data": {
                   "default value": 0.0,
                   "point values": [
-                     { "wavelength": 121.50, "value": 2.0e-18 }
+                     { "wavelength": 121.65, "value": 2.0e-18 }
                   ]
                }
             },

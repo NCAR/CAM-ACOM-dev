@@ -827,9 +827,6 @@ contains
                           eff_alb, cld_mult )
           cld_mult(:) = esfact * cld_mult(:)
 
-          ! Clear Sky
-          ! cld_mult(:) = 1._r8
-
           !-----------------------------------------------------------------
           !	... long wave length component
           !-----------------------------------------------------------------
