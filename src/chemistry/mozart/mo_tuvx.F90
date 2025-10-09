@@ -143,7 +143,7 @@ module mo_tuvx
   integer :: swaertauw_idx  = -1       ! shortwave aerosol extinction optical depth * single scattering albedo. tau*w
   integer :: swaertauwg_idx = -1       ! shortwave aerosol extinction optical depth * single scattering albedo * asymmetry parameter. tau*w*g
   integer :: swcldtau_idx   = -1       ! shortwave cloud extinction optical depth. tau
-  integer :: swcldtauw_idx  = -1       ! shortwave cloud extinction optical depth * single scattering albedo. tau*w 
+  integer :: swcldtauw_idx  = -1       ! shortwave cloud extinction optical depth * single scattering albedo. tau*w
   integer :: swcldtauwg_idx = -1       ! shortwave cloud extinction optical depth * single scattering albedo * asymmetry parameter. tau*w*g
   type (interp_type) :: interp_wgts
   real(r8) :: rrtmg_wavelength(nswbands-1)
@@ -517,7 +517,7 @@ contains
                        trim( to_char( number_of_heating_rates ) )//"." ) )
 
       ! physic buffer fields for aerosol optical properties.
-      ! Get the aerosol optical properties from radiation code. 
+      ! Get the aerosol optical properties from radiation code.
       ! The optical properties from radiation code is in the form of tau*w*g (extinction optical depth * single scattering albedo * asymmetry parameter)
       ! Individual parameters (extinction optical depth, single scattering albedo, asymmetry parameter) need to be derived to be used in TUVx
       swaertau_idx   = pbuf_get_index('SWAERTAU') ! optical depth
@@ -528,6 +528,15 @@ contains
       swcldtau_idx   = pbuf_get_index('SWCLDTAU')
       swcldtauw_idx  = pbuf_get_index('SWCLDTAUW')
       swcldtauwg_idx = pbuf_get_index('SWCLDTAUWG')
+
+      if( is_first_step( ) ) then
+        call pbuf_set_field( pbuf2d, swaertau_idx, 0.0_r8 )
+        call pbuf_set_field( pbuf2d, swaertauw_idx, 0.0_r8 )
+        call pbuf_set_field( pbuf2d, swaertauwg_idx, 0.0_r8 )
+        call pbuf_set_field( pbuf2d, swcldtau_idx, 0.0_r8 )
+        call pbuf_set_field( pbuf2d, swcldtauw_idx, 0.0_r8 )
+        call pbuf_set_field( pbuf2d, swcldtauwg_idx, 0.0_r8 )
+      end if
 
       ! Get the RRTMG wavenumber edges and convert to a wavelength center.
       !
@@ -1770,7 +1779,7 @@ contains
       real(r8) :: waer(pcols, pver, nwave) ! aerosol single scattering albedo on tuvx wavelength band
       real(r8) :: gaer(pcols, pver, nwave) ! aerosol asymmetry factor on tuvx wavelength band
 
-      real(r8) :: swaerw(pcols, pver, nswbands) ! aerosol single scattering albedo on radiation wavelength band 
+      real(r8) :: swaerw(pcols, pver, nswbands) ! aerosol single scattering albedo on radiation wavelength band
       real(r8) :: swaerg(pcols, pver, nswbands) ! aerosol asymmetry factor on radiation wavelength band
 
       real(r8) :: taucld(pcols, pver, nwave) ! cloud optical depth on tuvx wavelength band
