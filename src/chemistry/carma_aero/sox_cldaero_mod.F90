@@ -16,6 +16,8 @@ module sox_cldaero_mod
   use chem_mods,       only : gas_pcnst
   use rad_constituents, only: rad_cnst_get_info, rad_cnst_get_info_by_bin, rad_cnst_get_bin_props_by_idx
 
+  use carma_aerosol_properties_mod, only: carma_aerosol_properties
+
   implicit none
   private
 
@@ -33,9 +35,9 @@ module sox_cldaero_mod
   integer, public, protected :: nbins = 0
   integer, public, protected, allocatable :: nspec(:)
 
-  ! local indexing for bins
-  integer, allocatable :: bin_idx(:,:) ! table for local indexing of modal aero number and mmr
   integer :: ncnst_tot                  ! total number of mode number conc + mode species
+
+  type(carma_aerosol_properties), pointer :: aero_props =>null()
 
 contains
 
@@ -76,26 +78,9 @@ contains
     ! add plus one to include number, total mmr and nspec
     nspec_max = maxval(nspec)
 
-    ncnst_tot = nspec(1)
-    do m = 2, nbins
-      ncnst_tot = ncnst_tot + nspec(m)
-    end do
+    aero_props => carma_aerosol_properties()
 
-   allocate(  bin_idx(nbins,nspec_max) )
-
-
-   ! Local indexing compresses the mode and number/mass indicies into one index.
-   ! This indexing is used by the pointer arrays used to reference state and pbuf
-   ! fields.
-   ! for CARMA we add number = 0, total mass = 1, and mass from each constituence into mm.
-   ii = 0
-   do m = 1, nbins
-      do l = 1, nspec(m)    ! loop through species
-         ii = ii + 1
-         bin_idx(m,l) = ii
-      end do
-   end do
-
+    ncnst_tot = aero_props%ncnst_tot()
 
   end subroutine sox_cldaero_init
 
@@ -145,11 +130,11 @@ contains
        do i = 1,ncol
           do m = 1, nbins
             do l = 1, nspec(m)
-                  mm = bin_idx(m, l)
-                 call rad_cnst_get_bin_props_by_idx(0, m, l,spectype=spectype)
-                 if (trim(spectype) == 'sulfate') then
-                       so4mmr(i,k) =  so4mmr(i,k) +  qcw(i,k,mm)
-                 end if
+               mm = aero_props%indexer(m,l)
+               call  aero_props%get(m,l, spectype=spectype)
+               if (trim(spectype) == 'sulfate') then
+                  so4mmr(i,k) =  so4mmr(i,k) +  qcw(i,k,mm)
+               end if
             end do
           end do
        end do
@@ -263,7 +248,6 @@ contains
     do n = 1, nbins
        call rad_cnst_get_info_by_bin(0, n, nspec=nspec(n), bin_name=bin_name)
 
-
        nchr = len_trim(bin_name)-2
        shortname = bin_name(:nchr)
 
@@ -346,8 +330,8 @@ contains
                 ! compute TMR tendencies for so4, not done currently for msa aerosol-in-cloud-water
                 do n = 1, nbins
                    do l = 1, nspec(n)
-                      mm = bin_idx(n, l)
-                       call rad_cnst_get_bin_props_by_idx(0, n, l,spectype=spectype)
+                       mm = aero_props%indexer(n,l)
+                       call aero_props%get(n,l, spectype=spectype)
                        if (trim(spectype) == 'sulfate') then
                          if (faqgain_so4(n) .gt. 0.0_r8) then
                           dqdt_aqso4(i,k,mm) = faqgain_so4(n)*dso4dt_aqrxn*cldfrc(i,k)
@@ -357,9 +341,7 @@ contains
                           dqdt_aq = dqdt_aqso4(i,k,mm) + dqdt_aqh2so4(i,k,mm)
                           dqdt_wr = -fwetrem*dqdt_aq
                           dqdt= dqdt_aq + dqdt_wr
-                          !write(iulog,*) 'qcw(i,k,mm) before ', m, qcw(i,k,mm)
                           qcw(i,k,mm) = qcw(i,k,mm) + dqdt*dtime
-                          !write(iulog,*) 'qcw(i,k,mm) after', m, qcw(i,k,mm)
                          end if
                        end if
                    end do
@@ -415,7 +397,7 @@ contains
       do n = 1, nbins
         ! while looking through all species, only dqdt_aqso4 from sulfates  is gt zero
         do l = 1, nspec(n)
-           mm = bin_idx(n, l)
+           mm = aero_props%indexer(n,l)
            aqso4(:,n)=0._r8
             do k=1,pver
                do i=1,ncol
