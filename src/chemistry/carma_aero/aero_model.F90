@@ -472,7 +472,7 @@ contains
     !-----------------------------------------------------------------------
     !      ... dummy arguments
     !-----------------------------------------------------------------------
-    type(physics_state), intent(in)    :: state    ! Physics state variables
+    type(physics_state),target, intent(in) :: state  ! Physics state variables
     integer,  intent(in) :: loffset                ! offset applied to modal aero "pointers"
     integer,  intent(in) :: ncol                   ! number columns in chunk
     integer,  intent(in) :: lchnk                  ! chunk index
@@ -755,7 +755,9 @@ contains
        end do
     end do
 
-
+    deallocate(aero_state)
+    nullify(aero_state)
+    
   end subroutine aero_model_gasaerexch
 
   !=============================================================================

@@ -696,6 +696,9 @@ subroutine carma_aero_gasaerexch_sub(  state, &
      end if
   end do ! m = ...
 
+  deallocate(aero_state)
+  nullify(aero_state)
+
 end subroutine carma_aero_gasaerexch_sub
 
 
