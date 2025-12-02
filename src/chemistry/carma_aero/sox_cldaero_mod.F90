@@ -31,7 +31,6 @@ module sox_cldaero_mod
   real(r8), parameter :: small_value = 1.e-20_r8
 
   ! description of bin aerosols
-  integer, public, protected :: nspec_max = 0
   integer, public, protected :: nbins = 0
   integer, public, protected, allocatable :: nspec(:)
 
@@ -75,8 +74,6 @@ contains
     do m = 1, nbins
        call rad_cnst_get_info_by_bin(0, m, nspec=nspec(m))
     end do
-    ! add plus one to include number, total mmr and nspec
-    nspec_max = maxval(nspec)
 
     aero_props => carma_aerosol_properties()
 
@@ -330,10 +327,10 @@ contains
                 ! compute TMR tendencies for so4, not done currently for msa aerosol-in-cloud-water
                 do n = 1, nbins
                    do l = 1, nspec(n)
-                       mm = aero_props%indexer(n,l)
+                      mm = aero_props%indexer(n,l)
                        call aero_props%get(n,l, spectype=spectype)
                        if (trim(spectype) == 'sulfate') then
-                         if (faqgain_so4(n) .gt. 0.0_r8) then
+                          if (faqgain_so4(n) .gt. 0.0_r8) then
                           dqdt_aqso4(i,k,mm) = faqgain_so4(n)*dso4dt_aqrxn*cldfrc(i,k)
 
                           dqdt_aqh2so4(i,k,mm) = faqgain_so4(n)* &
@@ -342,6 +339,8 @@ contains
                           dqdt_wr = -fwetrem*dqdt_aq
                           dqdt= dqdt_aq + dqdt_wr
                           qcw(i,k,mm) = qcw(i,k,mm) + dqdt*dtime
+
+
                          end if
                        end if
                    end do

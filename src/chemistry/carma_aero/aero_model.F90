@@ -720,32 +720,32 @@ contains
 
     ! note vmr2qqcw does not change qqcw pointer (different than in MAM)
     call vmr2mmr_carma ( lchnk, vmrcw, mbar, mw_carma, ncol, loffset, rmass )
-
-    !vmrcw in kg/kg
-    ! change pointer value for total mmr and number. In order to do this correctly
-    ! only mass has to be added to each bin (not number). This will require redistributing
-    ! mass to different bins. Here, we change both mass and number until we have a better
-    ! solution.
-    delta_so4mass(:,:,:) = 0.0_r8
-    do m = 1, nbins
-       do l = 1, nspec(m)  ! for sulfate only
-          mm = aero_props%indexer(m,l)
-          ! sulfate mass that needs to be added to the total mass
-          call rad_cnst_get_bin_props_by_idx(0, m, l,spectype=spectype)
-          if (trim(spectype) == 'sulfate') then
-              ! only do loop if vmrcw has changed
-              do k=1,pver
-                 do i=1,ncol
-                  if (vmrcw(i,k,mm) .gt. mmrcw(i,k,mm) .and. mmrcw(i,k,mm) /= 0.0_r8)  then
-                   delta_so4mass(i,k,mm) = ( vmrcw(i,k,mm) - mmrcw(i,k,mm) )
-                  else
-                    delta_so4mass(i,k,mm) = 0.0_r8
-                  end if
-                 end do
-              end do
-         end if
-       end do
-    end do
+!!$
+!!$    !vmrcw in kg/kg
+!!$    ! change pointer value for total mmr and number. In order to do this correctly
+!!$    ! only mass has to be added to each bin (not number). This will require redistributing
+!!$    ! mass to different bins. Here, we change both mass and number until we have a better
+!!$    ! solution.
+!!$    delta_so4mass(:,:,:) = 0.0_r8
+!!$    do m = 1, nbins
+!!$       do l = 1, nspec(m)  ! for sulfate only
+!!$          mm = aero_props%indexer(m,l)
+!!$          ! sulfate mass that needs to be added to the total mass
+!!$          call rad_cnst_get_bin_props_by_idx(0, m, l,spectype=spectype)
+!!$          if (trim(spectype) == 'sulfate') then
+!!$              ! only do loop if vmrcw has changed
+!!$              do k=1,pver
+!!$                 do i=1,ncol
+!!$                  if (vmrcw(i,k,mm) .gt. mmrcw(i,k,mm) .and. mmrcw(i,k,mm) /= 0.0_r8)  then
+!!$                   delta_so4mass(i,k,mm) = ( vmrcw(i,k,mm) - mmrcw(i,k,mm) )
+!!$                  else
+!!$                    delta_so4mass(i,k,mm) = 0.0_r8
+!!$                  end if
+!!$                 end do
+!!$              end do
+!!$         end if
+!!$       end do
+!!$    end do
 
     do m = 1, nbins
        do l = 1, nspec(m) ! for sulfate only
@@ -757,7 +757,7 @@ contains
 
     deallocate(aero_state)
     nullify(aero_state)
-    
+
   end subroutine aero_model_gasaerexch
 
   !=============================================================================

@@ -18,7 +18,8 @@
   use ppgrid,          only:  pcols, pver
   use modal_aero_data, only:  ntot_amode, numptr_amode, sigmag_amode
   use modal_aero_data, only: lptr2_soa_g_amode, lptr2_soa_a_amode, lptr2_pom_a_amode
-
+  use modal_aerosol_properties_mod, only: modal_aerosol_properties
+  
   implicit none
   private
   save
@@ -57,6 +58,10 @@
   real (r8), allocatable :: fac_m2v_soa(:)
 
   real (r8), allocatable :: fac_m2v_pcarbon(:)
+
+  ! local indexing for bins
+  integer :: ncnst_tot                  ! total number of mode number conc + mode species
+  type(modal_aerosol_properties), pointer :: aero_props =>null()
 
 ! !DESCRIPTION: This module implements ...
 !
@@ -124,13 +129,13 @@ implicit none
                                                    ! *** MUST BE  #/kmol-air for number
                                                    ! *** MUST BE mol/mol-air for mass
                                                    ! *** NOTE ncol dimension
-   real(r8), intent(inout) :: qqcw(ncol,pver,pcnstxx)
+   real(r8), intent(inout) :: qqcw(ncol,pver,ncnst_tot)
                                                    ! like q but for cloud-borner tracers
    real(r8), intent(in)    :: dqdt_other(ncol,pver,pcnstxx)
                                                    ! TMR tendency from other continuous
                                                    ! growth processes (aqchem, soa??)
                                                    ! *** NOTE ncol dimension
-   real(r8), intent(in)    :: dqqcwdt_other(ncol,pver,pcnstxx)
+   real(r8), intent(in)    :: dqqcwdt_other(ncol,pver,ncnst_tot)
                                                    ! like dqdt_other but for cloud-borner tracers
    real(r8), intent(in)    :: t(pcols,pver)        ! temperature at model levels (K)
    real(r8), intent(in)    :: pmid(pcols,pver)     ! pressure at model levels (Pa)
@@ -1482,6 +1487,10 @@ implicit none
    logical                        :: history_aerosol      ! Output the MAM aerosol tendencies
    logical                        :: history_aerocom    ! Output the aerocom history
    !-----------------------------------------------------------------------
+
+    aero_props => modal_aerosol_properties()
+
+    ncnst_tot = aero_props%ncnst_tot()
 
         call phys_getopts( history_aerosol_out        = history_aerosol   )
 

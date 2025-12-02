@@ -16,6 +16,7 @@ module sox_cldaero_mod
   use phys_control,    only : phys_getopts, cam_chempkg_is
   use cldaero_mod,     only : cldaero_uptakerate
   use chem_mods,       only : gas_pcnst
+  use modal_aerosol_properties_mod, only: modal_aerosol_properties
 
   implicit none
   private
@@ -28,6 +29,10 @@ module sox_cldaero_mod
   integer :: id_msa, id_h2so4, id_so2, id_h2o2, id_nh3
 
   real(r8), parameter :: small_value = 1.e-20_r8
+
+  integer :: ncnst_tot                  ! total number of mode number conc + mode species
+
+  type(modal_aerosol_properties), pointer :: aero_props =>null()
 
 contains
 
@@ -55,6 +60,10 @@ contains
     !   add to history
     !
 
+    aero_props => modal_aerosol_properties()
+
+    ncnst_tot = aero_props%ncnst_tot()
+
   end subroutine sox_cldaero_init
 
 !----------------------------------------------------------------------------------
@@ -78,6 +87,9 @@ contains
 
     logical :: mode7
 
+    integer :: m, mm
+    character(len=32) :: spectype
+
     mode7 = ntot_amode == 7
 
     conc_obj => cldaero_allocate()
@@ -94,54 +106,73 @@ contains
     enddo
 
     conc_obj%no3c(:,:) = 0._r8
+    conc_obj%nh4c(:,:) = 0._r8
+    conc_obj%so4c(:,:) = 0._r8
+
+    do k = 1,pver
+       do i = 1,ncol
+          do m = 1, aero_props%nbins()
+            do l = 1, aero_props%nspecies(m)
+               mm = aero_props%indexer(m,l)
+               call  aero_props%get(m,l, spectype=spectype)
+               if (trim(spectype) == 'sulfate') then
+                  conc_obj%so4c(i,k) = conc_obj%so4c(i,k) +  qcw(i,k,mm)
+               end if
+               if (trim(spectype) == 'ammonium') then
+                  conc_obj%nh4c(i,k) = conc_obj%nh4c(i,k) +  qcw(i,k,mm)
+               end if
+            end do
+          end do
+       end do
+    end do
 
     if (mode7) then
-#if ( defined MODAL_AERO_7MODE )
-!put ifdef here so ifort will compile
-       id_so4_1a = lptr_so4_cw_amode(1) - loffset
-       id_so4_2a = lptr_so4_cw_amode(2) - loffset
-       id_so4_3a = lptr_so4_cw_amode(4) - loffset
-       id_so4_4a = lptr_so4_cw_amode(5) - loffset
-       id_so4_5a = lptr_so4_cw_amode(6) - loffset
-       id_so4_6a = lptr_so4_cw_amode(7) - loffset
-
-       id_nh4_1a = lptr_nh4_cw_amode(1) - loffset
-       id_nh4_2a = lptr_nh4_cw_amode(2) - loffset
-       id_nh4_3a = lptr_nh4_cw_amode(4) - loffset
-       id_nh4_4a = lptr_nh4_cw_amode(5) - loffset
-       id_nh4_5a = lptr_nh4_cw_amode(6) - loffset
-       id_nh4_6a = lptr_nh4_cw_amode(7) - loffset
-#endif
-       conc_obj%so4c(:ncol,:) &
-            = qcw(:ncol,:,id_so4_1a) &
-            + qcw(:ncol,:,id_so4_2a) &
-            + qcw(:ncol,:,id_so4_3a) &
-            + qcw(:ncol,:,id_so4_4a) &
-            + qcw(:ncol,:,id_so4_5a) &
-            + qcw(:ncol,:,id_so4_6a)
-
-       conc_obj%nh4c(:ncol,:) &
-            = qcw(:ncol,:,id_nh4_1a) &
-            + qcw(:ncol,:,id_nh4_2a) &
-            + qcw(:ncol,:,id_nh4_3a) &
-            + qcw(:ncol,:,id_nh4_4a) &
-            + qcw(:ncol,:,id_nh4_5a) &
-            + qcw(:ncol,:,id_nh4_6a)
+!!$#if ( defined MODAL_AERO_7MODE )
+!!$!put ifdef here so ifort will compile
+!!$       id_so4_1a = lptr_so4_cw_amode(1) - loffset
+!!$       id_so4_2a = lptr_so4_cw_amode(2) - loffset
+!!$       id_so4_3a = lptr_so4_cw_amode(4) - loffset
+!!$       id_so4_4a = lptr_so4_cw_amode(5) - loffset
+!!$       id_so4_5a = lptr_so4_cw_amode(6) - loffset
+!!$       id_so4_6a = lptr_so4_cw_amode(7) - loffset
+!!$
+!!$       id_nh4_1a = lptr_nh4_cw_amode(1) - loffset
+!!$       id_nh4_2a = lptr_nh4_cw_amode(2) - loffset
+!!$       id_nh4_3a = lptr_nh4_cw_amode(4) - loffset
+!!$       id_nh4_4a = lptr_nh4_cw_amode(5) - loffset
+!!$       id_nh4_5a = lptr_nh4_cw_amode(6) - loffset
+!!$       id_nh4_6a = lptr_nh4_cw_amode(7) - loffset
+!!$#endif
+!!$       conc_obj%so4c(:ncol,:) &
+!!$            = qcw(:ncol,:,id_so4_1a) &
+!!$            + qcw(:ncol,:,id_so4_2a) &
+!!$            + qcw(:ncol,:,id_so4_3a) &
+!!$            + qcw(:ncol,:,id_so4_4a) &
+!!$            + qcw(:ncol,:,id_so4_5a) &
+!!$            + qcw(:ncol,:,id_so4_6a)
+!!$
+!!$       conc_obj%nh4c(:ncol,:) &
+!!$            = qcw(:ncol,:,id_nh4_1a) &
+!!$            + qcw(:ncol,:,id_nh4_2a) &
+!!$            + qcw(:ncol,:,id_nh4_3a) &
+!!$            + qcw(:ncol,:,id_nh4_4a) &
+!!$            + qcw(:ncol,:,id_nh4_5a) &
+!!$            + qcw(:ncol,:,id_nh4_6a)
     else
-       id_so4_1a = lptr_so4_cw_amode(1) - loffset
-       id_so4_2a = lptr_so4_cw_amode(2) - loffset
-       id_so4_3a = lptr_so4_cw_amode(3) - loffset
-       conc_obj%so4c(:ncol,:) &
-            = qcw(:,:,id_so4_1a) &
-            + qcw(:,:,id_so4_2a) &
-            + qcw(:,:,id_so4_3a)
-
-        ! for 3-mode, so4 is assumed to be nh4hso4
-        ! the partial neutralization of so4 is handled by using a
-        !    -1 charge (instead of -2) in the electro-neutrality equation
-       conc_obj%nh4c(:ncol,:) = 0._r8
-
-       ! with 3-mode, assume so4 is nh4hso4, and so half-neutralized
+!!$       id_so4_1a = lptr_so4_cw_amode(1) - loffset
+!!$       id_so4_2a = lptr_so4_cw_amode(2) - loffset
+!!$       id_so4_3a = lptr_so4_cw_amode(3) - loffset
+!!$       conc_obj%so4c(:ncol,:) &
+!!$            = qcw(:,:,id_so4_1a) &
+!!$            + qcw(:,:,id_so4_2a) &
+!!$            + qcw(:,:,id_so4_3a)
+!!$
+!!$        ! for 3-mode, so4 is assumed to be nh4hso4
+!!$        ! the partial neutralization of so4 is handled by using a
+!!$        !    -1 charge (instead of -2) in the electro-neutrality equation
+!!$       conc_obj%nh4c(:ncol,:) = 0._r8
+!!$
+!!$       ! with 3-mode, assume so4 is nh4hso4, and so half-neutralized
        conc_obj%so4_fact = 1._r8
 
     endif
@@ -221,11 +252,12 @@ contains
     real(r8) :: fwetrem, sumf, uptkrate
     real(r8) :: delnh3, delnh4
 
-    integer :: l, n, m
+    integer :: l, n, m, mm
     integer :: ntot_msa_c
 
     integer :: i,k
     real(r8) :: xl
+    character(len=32) :: spectype
 
     ! make sure dqdt is zero initially, for budgets
     dqdt_aqso4(:,:,:) = 0.0_r8
@@ -264,10 +296,10 @@ contains
                 ! qnum_c(n) = activated particle number MR for mode n (these are just
                 ! used for partitioning among modes, so don't need to divide by cldfrc)
 
-                do n = 1, ntot_amode
-                   qnum_c(n) = 0.0_r8
-                   l = numptrcw_amode(n) - loffset
-                   if (l > 0) qnum_c(n) = max( 0.0_r8, qcw(i,k,l) )
+                do m = 1, aero_props%nbins()
+                   mm = aero_props%indexer(m,0)
+                   qnum_c(m) = 0.0_r8
+                   if (l > 0) qnum_c(m) = max( 0.0_r8, qcw(i,k,mm) )
                 end do
 
                 ! force qnum_c(n) to be positive for n=modeptr_accum or n=1
@@ -347,39 +379,37 @@ contains
                 fwetrem = 0.0_r8 ! don't have so4 & msa wet removal here
 
                 ! compute TMR tendencies for so4 and msa aerosol-in-cloud-water
-                do n = 1, ntot_amode
-                   l = lptr_so4_cw_amode(n) - loffset
-                   if (l > 0) then
-                      dqdt_aqso4(i,k,l) = faqgain_so4(n)*dso4dt_aqrxn*cldfrc(i,k)
-                      dqdt_aqh2so4(i,k,l) = faqgain_so4(n)* &
-                           (dso4dt_gasuptk + dmsadt_gasuptk_toso4)*cldfrc(i,k)
-                      dqdt_aq = dqdt_aqso4(i,k,l) + dqdt_aqh2so4(i,k,l)
-                      dqdt_wr = -fwetrem*dqdt_aq
-                      dqdt= dqdt_aq + dqdt_wr
-                      qcw(i,k,l) = qcw(i,k,l) + dqdt*dtime
-                   end if
+                do m = 1, aero_props%nbins()
+                   do l = 1, aero_props%nspecies(m)
+                      mm = aero_props%indexer(m,l)
+                      call  aero_props%get(m,l, spectype=spectype)
+                      if (trim(spectype) == 'sulfate') then
 
-                   l = lptr_msa_cw_amode(n) - loffset
-                   if (l > 0) then
-                      dqdt_aq = faqgain_msa(n)*dmsadt_gasuptk_tomsa*cldfrc(i,k)
-                      dqdt_wr = -fwetrem*dqdt_aq
-                      dqdt = dqdt_aq + dqdt_wr
-                      qcw(i,k,l) = qcw(i,k,l) + dqdt*dtime
-                   end if
+                         dqdt_aqso4(i,k,mm) = faqgain_so4(m)*dso4dt_aqrxn*cldfrc(i,k)
 
-                   l = lptr_nh4_cw_amode(n) - loffset
-                   if (l > 0) then
-                      if (delnh4 > 0.0_r8) then
-                         dqdt_aq = faqgain_so4(n)*delnh4/dtime*cldfrc(i,k)
-                         dqdt = dqdt_aq
-                         qcw(i,k,l) = qcw(i,k,l) + dqdt*dtime
-                      else
-                         dqdt = (qcw(i,k,l)/max(xnh4c(i,k),1.0e-35_r8)) &
-                              *delnh4/dtime*cldfrc(i,k)
-                         qcw(i,k,l) = qcw(i,k,l) + dqdt*dtime
-                      endif
-                   end if
+                         dqdt_aqh2so4(i,k,mm) = faqgain_so4(m)* &
+                              (dso4dt_gasuptk + dmsadt_gasuptk_toso4)*cldfrc(i,k)
+                         dqdt_aq = dqdt_aqso4(i,k,mm) + dqdt_aqh2so4(i,k,mm)
+                         dqdt_wr = -fwetrem*dqdt_aq
+                         dqdt= dqdt_aq + dqdt_wr
+                         qcw(i,k,mm) = qcw(i,k,mm) + dqdt*dtime
+
+
+                      end if
+                      if (trim(spectype) == 'ammonium') then
+                         if (delnh4 > 0.0_r8) then
+                            dqdt_aq = faqgain_so4(n)*delnh4/dtime*cldfrc(i,k)
+                            dqdt = dqdt_aq
+                            qcw(i,k,mm) = qcw(i,k,mm) + dqdt*dtime
+                         else
+                            dqdt = (qcw(i,k,l)/max(xnh4c(i,k),1.0e-35_r8)) &
+                                 *delnh4/dtime*cldfrc(i,k)
+                            qcw(i,k,mm) = qcw(i,k,mm) + dqdt*dtime
+                         endif
+                      end if
+                   end do
                 end do
+
 
                 ! For gas species, tendency includes
                 ! reactive uptake to cloud water that essentially transforms the gas to
@@ -431,21 +461,20 @@ contains
     !==============================================================
     do k = 1,pver
 
-       do n = 1, ntot_amode
-
-          l = lptr_so4_cw_amode(n) - loffset
-          if (l > 0) then
-             qcw(:,k,l) = MAX(qcw(:,k,l), small_value )
-          end if
-          l = lptr_msa_cw_amode(n) - loffset
-          if (l > 0) then
-             qcw(:,k,l) = MAX(qcw(:,k,l), small_value )
-          end if
-          l = lptr_nh4_cw_amode(n) - loffset
-          if (l > 0) then
-             qcw(:,k,l) = MAX(qcw(:,k,l), small_value )
-          end if
-
+       do n = 1, aero_props%nbins()
+          do l = 1, aero_props%nspecies(n)
+             mm = aero_props%indexer(n,l)
+             call  aero_props%get(n,l, spectype=spectype)
+             if (trim(spectype) == 'sulfate') then
+                qcw(:,k,mm) = MAX(qcw(:,k,mm), small_value )
+             end if
+             if (trim(spectype) == 'msa') then
+                qcw(:,k,mm) = MAX(qcw(:,k,mm), small_value )
+             end if
+             if (trim(spectype) == 'ammonium') then
+                qcw(:,k,mm) = MAX(qcw(:,k,mm), small_value )
+             end if
+          end do
        end do
 
        qin(:,k,id_so2)   = MAX( qin(:,k,id_so2),   small_value )
