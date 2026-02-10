@@ -8,9 +8,6 @@ module sox_cldaero_mod
   use ppgrid,          only : pcols, pver
   use mo_chem_utls,    only : get_spc_ndx
   use cldaero_mod,     only : cldaero_conc_t, cldaero_allocate, cldaero_deallocate
-  use modal_aero_data, only : ntot_amode, modeptr_accum, lptr_so4_cw_amode, lptr_msa_cw_amode
-  use modal_aero_data, only : numptrcw_amode, lptr_nh4_cw_amode
-  use modal_aero_data, only : cnst_name_cw, specmw_so4_amode
   use chem_mods,       only : adv_mass
   use physconst,       only : gravit
   use phys_control,    only : phys_getopts, cam_chempkg_is
@@ -34,6 +31,10 @@ module sox_cldaero_mod
 
   type(modal_aerosol_properties), pointer :: aero_props =>null()
 
+  ! Module-level helper variables
+  integer :: modeptr_accum_local = -1  ! Index of accumulation mode
+  real(r8) :: specmw_so4 = -1     ! SO4 molecular weight (will be queried from properties)
+
 contains
 
 !----------------------------------------------------------------------------------
@@ -43,6 +44,8 @@ contains
 
     integer :: l, m
     logical :: history_aerosol      ! Output the MAM aerosol tendencies
+    character(len=32) :: spectype
+    real(r8) :: density
 
     id_msa = get_spc_ndx( 'MSA' )
     id_h2so4 = get_spc_ndx( 'H2SO4' )
@@ -63,6 +66,26 @@ contains
     aero_props => modal_aerosol_properties()
 
     ncnst_tot = aero_props%ncnst_tot()
+
+    ! Find accumulation mode - look for mode with 'sulfate' that is soluble
+    ! This assumes accumulation mode contains sulfate
+    do m = 1, aero_props%nbins()
+       if (aero_props%soluble(m)) then
+          do l = 1, aero_props%nspecies(m)
+             call aero_props%get(m, l, spectype=spectype)
+             if (trim(spectype) == 'sulfate') then
+                modeptr_accum_local = m
+                exit
+             endif
+          enddo
+       endif
+       if (modeptr_accum_local > 0) exit
+    enddo
+
+    if (modeptr_accum_local < 0) modeptr_accum_local = 1  ! default to first mode
+
+    ! Get SO4 molecular weight - use standard value
+    specmw_so4 = 96.0_r8  ! g/mol for SO4
 
   end subroutine sox_cldaero_init
 
@@ -90,7 +113,7 @@ contains
     integer :: m, mm
     character(len=32) :: spectype
 
-    mode7 = ntot_amode == 7
+    mode7 = aero_props%nbins() == 7
 
     conc_obj => cldaero_allocate()
 
@@ -108,6 +131,7 @@ contains
     conc_obj%no3c(:,:) = 0._r8
     conc_obj%nh4c(:,:) = 0._r8
     conc_obj%so4c(:,:) = 0._r8
+    conc_obj%so4_fat = 1._r8
 
     do k = 1,pver
        do i = 1,ncol
@@ -126,56 +150,6 @@ contains
        end do
     end do
 
-    if (mode7) then
-!!$#if ( defined MODAL_AERO_7MODE )
-!!$!put ifdef here so ifort will compile
-!!$       id_so4_1a = lptr_so4_cw_amode(1) - loffset
-!!$       id_so4_2a = lptr_so4_cw_amode(2) - loffset
-!!$       id_so4_3a = lptr_so4_cw_amode(4) - loffset
-!!$       id_so4_4a = lptr_so4_cw_amode(5) - loffset
-!!$       id_so4_5a = lptr_so4_cw_amode(6) - loffset
-!!$       id_so4_6a = lptr_so4_cw_amode(7) - loffset
-!!$
-!!$       id_nh4_1a = lptr_nh4_cw_amode(1) - loffset
-!!$       id_nh4_2a = lptr_nh4_cw_amode(2) - loffset
-!!$       id_nh4_3a = lptr_nh4_cw_amode(4) - loffset
-!!$       id_nh4_4a = lptr_nh4_cw_amode(5) - loffset
-!!$       id_nh4_5a = lptr_nh4_cw_amode(6) - loffset
-!!$       id_nh4_6a = lptr_nh4_cw_amode(7) - loffset
-!!$#endif
-!!$       conc_obj%so4c(:ncol,:) &
-!!$            = qcw(:ncol,:,id_so4_1a) &
-!!$            + qcw(:ncol,:,id_so4_2a) &
-!!$            + qcw(:ncol,:,id_so4_3a) &
-!!$            + qcw(:ncol,:,id_so4_4a) &
-!!$            + qcw(:ncol,:,id_so4_5a) &
-!!$            + qcw(:ncol,:,id_so4_6a)
-!!$
-!!$       conc_obj%nh4c(:ncol,:) &
-!!$            = qcw(:ncol,:,id_nh4_1a) &
-!!$            + qcw(:ncol,:,id_nh4_2a) &
-!!$            + qcw(:ncol,:,id_nh4_3a) &
-!!$            + qcw(:ncol,:,id_nh4_4a) &
-!!$            + qcw(:ncol,:,id_nh4_5a) &
-!!$            + qcw(:ncol,:,id_nh4_6a)
-    else
-!!$       id_so4_1a = lptr_so4_cw_amode(1) - loffset
-!!$       id_so4_2a = lptr_so4_cw_amode(2) - loffset
-!!$       id_so4_3a = lptr_so4_cw_amode(3) - loffset
-!!$       conc_obj%so4c(:ncol,:) &
-!!$            = qcw(:,:,id_so4_1a) &
-!!$            + qcw(:,:,id_so4_2a) &
-!!$            + qcw(:,:,id_so4_3a)
-!!$
-!!$        ! for 3-mode, so4 is assumed to be nh4hso4
-!!$        ! the partial neutralization of so4 is handled by using a
-!!$        !    -1 charge (instead of -2) in the electro-neutrality equation
-!!$       conc_obj%nh4c(:ncol,:) = 0._r8
-!!$
-!!$       ! with 3-mode, assume so4 is nh4hso4, and so half-neutralized
-       conc_obj%so4_fact = 1._r8
-
-    endif
 
   end function sox_cldaero_create_obj
 
@@ -241,7 +215,7 @@ contains
          dqdt_aqhprxn(ncol,pver), dqdt_aqo3rxn(ncol,pver), &
          sflx(1:ncol)
 
-    real(r8) :: faqgain_msa(ntot_amode), faqgain_so4(ntot_amode), qnum_c(ntot_amode)
+    real(r8), allocatable :: faqgain_msa(:), faqgain_so4(:), qnum_c(:)
 
     real(r8) :: delso4_o3rxn, &
          dso4dt_aqrxn, dso4dt_hprxn, &
@@ -258,6 +232,14 @@ contains
     integer :: i,k
     real(r8) :: xl
     character(len=32) :: spectype
+    real(r8) :: density
+
+    ! Allocate mode-dependent arrays
+    if (.not. allocated(faqgain_msa)) then
+       allocate(faqgain_msa(aero_props%nbins()))
+       allocate(faqgain_so4(aero_props%nbins()))
+       allocate(qnum_c(aero_props%nbins()))
+    endif
 
     ! make sure dqdt is zero initially, for budgets
     dqdt_aqso4(:,:,:) = 0.0_r8
@@ -298,28 +280,33 @@ contains
 
                 do m = 1, aero_props%nbins()
                    mm = aero_props%indexer(m,0)
-                   qnum_c(m) = 0.0_r8
-                   if (l > 0) qnum_c(m) = max( 0.0_r8, qcw(i,k,mm) )
+                   qnum_c(m) = max( 0.0_r8, qcw(i,k,mm) )
                 end do
 
                 ! force qnum_c(n) to be positive for n=modeptr_accum or n=1
-                n = modeptr_accum
+                n = modeptr_accum_local
                 if (n <= 0) n = 1
                 qnum_c(n) = max( 1.0e-10_r8, qnum_c(n) )
 
                 ! faqgain_so4(n) = fraction of total so4_c gain going to mode n
                 ! these are proportional to the activated particle MR for each mode
+                ! Check if mode has sulfate species
                 sumf = 0.0_r8
-                do n = 1, ntot_amode
+                do n = 1, aero_props%nbins()
                    faqgain_so4(n) = 0.0_r8
-                   if (lptr_so4_cw_amode(n) > 0) then
-                      faqgain_so4(n) = qnum_c(n)
-                      sumf = sumf + faqgain_so4(n)
-                   end if
+                   ! Check if this mode has sulfate
+                   do l = 1, aero_props%nspecies(n)
+                      call aero_props%get(n, l, spectype=spectype)
+                      if (trim(spectype) == 'sulfate') then
+                         faqgain_so4(n) = qnum_c(n)
+                         sumf = sumf + faqgain_so4(n)
+                         exit
+                      endif
+                   enddo
                 end do
 
                 if (sumf > 0.0_r8) then
-                   do n = 1, ntot_amode
+                   do n = 1, aero_props%nbins()
                       faqgain_so4(n) = faqgain_so4(n) / sumf
                    end do
                 end if
@@ -328,17 +315,22 @@ contains
                 ! faqgain_msa(n) = fraction of total msa_c gain going to mode n
                 ntot_msa_c = 0
                 sumf = 0.0_r8
-                do n = 1, ntot_amode
+                do n = 1, aero_props%nbins()
                    faqgain_msa(n) = 0.0_r8
-                   if (lptr_msa_cw_amode(n) > 0) then
-                      faqgain_msa(n) = qnum_c(n)
-                      ntot_msa_c = ntot_msa_c + 1
-                   end if
+                   ! Check if this mode has MSA
+                   do l = 1, aero_props%nspecies(n)
+                      call aero_props%get(n, l, spectype=spectype)
+                      if (trim(spectype) == 'msa') then
+                         faqgain_msa(n) = qnum_c(n)
+                         ntot_msa_c = ntot_msa_c + 1
+                         exit
+                      endif
+                   enddo
                    sumf = sumf + faqgain_msa(n)
                 end do
 
                 if (sumf > 0.0_r8) then
-                   do n = 1, ntot_amode
+                   do n = 1, aero_props%nbins()
                       faqgain_msa(n) = faqgain_msa(n) / sumf
                    end do
                 end if
@@ -487,32 +479,36 @@ contains
 
     ! diagnostics
 
-    do n = 1, ntot_amode
-       m = lptr_so4_cw_amode(n)
-       l = m - loffset
-       if (l > 0) then
-          aqso4(:,n)=0._r8
-          do k=1,pver
-             do i=1,ncol
-                aqso4(i,n)=aqso4(i,n)+dqdt_aqso4(i,k,l)*adv_mass(l)/mbar(i,k) &
-                     *pdel(i,k)/gravit ! kg/m2/s
-             enddo
-          enddo
-
-          aqh2so4(:,n)=0._r8
-          do k=1,pver
-             do i=1,ncol
-                aqh2so4(i,n)=aqh2so4(i,n)+dqdt_aqh2so4(i,k,l)*adv_mass(l)/mbar(i,k) &
-                     *pdel(i,k)/gravit ! kg/m2/s
-             enddo
-          enddo
-       endif
+    ! Sum up diagnostics for each mode containing sulfate
+    do n = 1, aero_props%nbins()
+       aqso4(:,n) = 0._r8
+       aqh2so4(:,n) = 0._r8
+       
+       ! Find sulfate species in this mode
+       do l = 1, aero_props%nspecies(n)
+          call aero_props%get(n, l, spectype=spectype)
+          if (trim(spectype) == 'sulfate') then
+             mm = aero_props%indexer(n,l)
+             m = mm - loffset
+             if (m > 0) then
+                do k=1,pver
+                   do i=1,ncol
+                      aqso4(i,n)=aqso4(i,n)+dqdt_aqso4(i,k,m)*adv_mass(m)/mbar(i,k) &
+                           *pdel(i,k)/gravit ! kg/m2/s
+                      aqh2so4(i,n)=aqh2so4(i,n)+dqdt_aqh2so4(i,k,m)*adv_mass(m)/mbar(i,k) &
+                           *pdel(i,k)/gravit ! kg/m2/s
+                   enddo
+                enddo
+             endif
+             exit  ! Only process first sulfate species in mode
+          endif
+       enddo
     end do
 
     aqso4_h2o2(:) = 0._r8
     do k=1,pver
        do i=1,ncol
-          aqso4_h2o2(i)=aqso4_h2o2(i)+dqdt_aqhprxn(i,k)*specmw_so4_amode/mbar(i,k) &
+          aqso4_h2o2(i)=aqso4_h2o2(i)+dqdt_aqhprxn(i,k)*specmw_so4/mbar(i,k) &
                   *pdel(i,k)/gravit ! kg SO4 /m2/s
        enddo
     enddo
@@ -521,7 +517,7 @@ contains
        aqso4_h2o2_3d(:,:) = 0._r8
        do k=1,pver
           do i=1,ncol
-             aqso4_h2o2_3d(i,k)=dqdt_aqhprxn(i,k)*specmw_so4_amode/mbar(i,k) &
+             aqso4_h2o2_3d(i,k)=dqdt_aqhprxn(i,k)*specmw_so4/mbar(i,k) &
                                 *pdel(i,k)/gravit ! kg SO4 /m2/s
           enddo
        enddo
@@ -530,7 +526,7 @@ contains
     aqso4_o3(:)=0._r8
     do k=1,pver
        do i=1,ncol
-          aqso4_o3(i)=aqso4_o3(i)+dqdt_aqo3rxn(i,k)*specmw_so4_amode/mbar(i,k) &
+          aqso4_o3(i)=aqso4_o3(i)+dqdt_aqo3rxn(i,k)*specmw_so4/mbar(i,k) &
                   *pdel(i,k)/gravit ! kg SO4 /m2/s
        enddo
     enddo
@@ -539,7 +535,7 @@ contains
        aqso4_o3_3d(:,:)=0._r8
        do k=1,pver
           do i=1,ncol
-             aqso4_o3_3d(i,k)=dqdt_aqo3rxn(i,k)*specmw_so4_amode/mbar(i,k) &
+             aqso4_o3_3d(i,k)=dqdt_aqo3rxn(i,k)*specmw_so4/mbar(i,k) &
                               *pdel(i,k)/gravit ! kg SO4 /m2/s
           enddo
        enddo
