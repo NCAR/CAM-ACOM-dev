@@ -8,12 +8,10 @@ module sox_cldaero_mod
   use ppgrid,          only : pcols, pver
   use mo_chem_utls,    only : get_spc_ndx
   use cldaero_mod,     only : cldaero_conc_t, cldaero_allocate, cldaero_deallocate
-  use chem_mods,       only : adv_mass
   use physconst,       only : gravit
   use phys_control,    only : phys_getopts, cam_chempkg_is
   use cldaero_mod,     only : cldaero_uptakerate
-  use chem_mods,       only : gas_pcnst
-  use modal_aerosol_properties_mod, only: modal_aerosol_properties
+  use aerosol_properties_mod, only: aerosol_properties
 
   implicit none
   private
@@ -29,7 +27,7 @@ module sox_cldaero_mod
 
   integer :: ncnst_tot                  ! total number of mode number conc + mode species
 
-  type(modal_aerosol_properties), pointer :: aero_props =>null()
+  class(aerosol_properties), pointer :: aero_props => null()
 
   ! Module-level helper variables
   integer :: modeptr_accum_local = -1  ! Index of accumulation mode
@@ -40,12 +38,13 @@ contains
 !----------------------------------------------------------------------------------
 !----------------------------------------------------------------------------------
 
-  subroutine sox_cldaero_init
+  subroutine sox_cldaero_init(aero_props_in)
+
+    class(aerosol_properties), target, intent(in) :: aero_props_in
 
     integer :: l, m
     logical :: history_aerosol      ! Output the MAM aerosol tendencies
     character(len=32) :: spectype
-    real(r8) :: density
 
     id_msa = get_spc_ndx( 'MSA' )
     id_h2so4 = get_spc_ndx( 'H2SO4' )
@@ -63,12 +62,11 @@ contains
     !   add to history
     !
 
-    aero_props => modal_aerosol_properties()
+    aero_props => aero_props_in
 
     ncnst_tot = aero_props%ncnst_tot()
 
-    ! Find accumulation mode - look for mode with 'sulfate' that is soluble
-    ! This assumes accumulation mode contains sulfate
+    ! Find accumulation mode - look for first soluble mode with a sulfate species
     do m = 1, aero_props%nbins()
        if (aero_props%soluble(m)) then
           do l = 1, aero_props%nspecies(m)
@@ -84,7 +82,6 @@ contains
 
     if (modeptr_accum_local < 0) modeptr_accum_local = 1  ! default to first mode
 
-    ! Get SO4 molecular weight - use standard value
     specmw_so4 = 96.0_r8  ! g/mol for SO4
 
   end subroutine sox_cldaero_init
@@ -102,18 +99,10 @@ contains
 
     type(cldaero_conc_t), pointer :: conc_obj
 
-
-    integer :: id_so4_1a, id_so4_2a, id_so4_3a, id_so4_4a, id_so4_5a, id_so4_6a
-    integer :: id_nh4_1a, id_nh4_2a, id_nh4_3a, id_nh4_4a, id_nh4_5a, id_nh4_6a
-    integer :: l,n
-    integer :: i,k
-
-    logical :: mode7
-
-    integer :: m, mm
+    integer :: l, m, mm
+    integer :: i, k
     character(len=32) :: spectype
-
-    mode7 = aero_props%nbins() == 7
+    logical :: has_ammonium
 
     conc_obj => cldaero_allocate()
 
@@ -131,7 +120,22 @@ contains
     conc_obj%no3c(:,:) = 0._r8
     conc_obj%nh4c(:,:) = 0._r8
     conc_obj%so4c(:,:) = 0._r8
-    conc_obj%so4_fat = 1._r8
+
+    ! Determine whether ammonium is tracked as a separate aerosol species.
+    ! When it is not (e.g., MAM3), SO4 is treated as NH4HSO4 (charge -1),
+    ! so so4_fact = 1.  The default from cldaero_allocate is 2 (SO4^2-, charge -2).
+    has_ammonium = .false.
+    do m = 1, aero_props%nbins()
+       do l = 1, aero_props%nspecies(m)
+          call aero_props%get(m, l, spectype=spectype)
+          if (trim(spectype) == 'ammonium') then
+             has_ammonium = .true.
+             exit
+          endif
+       enddo
+       if (has_ammonium) exit
+    enddo
+    if (.not. has_ammonium) conc_obj%so4_fact = 1._r8
 
     do k = 1,pver
        do i = 1,ncol
@@ -140,16 +144,15 @@ contains
                mm = aero_props%indexer(m,l)
                call  aero_props%get(m,l, spectype=spectype)
                if (trim(spectype) == 'sulfate') then
-                  conc_obj%so4c(i,k) = conc_obj%so4c(i,k) +  qcw(i,k,mm)
+                  conc_obj%so4c(i,k) = conc_obj%so4c(i,k) + qcw(i,k,mm)
                end if
                if (trim(spectype) == 'ammonium') then
-                  conc_obj%nh4c(i,k) = conc_obj%nh4c(i,k) +  qcw(i,k,mm)
+                  conc_obj%nh4c(i,k) = conc_obj%nh4c(i,k) + qcw(i,k,mm)
                end if
             end do
           end do
        end do
     end do
-
 
   end function sox_cldaero_create_obj
 
@@ -204,16 +207,16 @@ contains
     real(r8), intent(out) :: aqh2so4(:,:)                 ! aqueous phase chemistry
     real(r8), intent(out) :: aqso4_h2o2(:)                ! SO4 aqueous phase chemistry due to H2O2 (kg/m2)
     real(r8), intent(out) :: aqso4_o3(:)                  ! SO4 aqueous phase chemistry due to O3 (kg/m2)
-    real(r8), intent(out), optional :: aqso4_h2o2_3d(:,:)                ! SO4 aqueous phase chemistry due to H2O2 (kg/m2)
-    real(r8), intent(out), optional :: aqso4_o3_3d(:,:)                  ! SO4 aqueous phase chemistry due to O3 (kg/m2)
+    real(r8), intent(out), optional :: aqso4_h2o2_3d(:,:) ! 3D SO4 aqueous phase chemistry due to H2O2 (kg/m2)
+    real(r8), intent(out), optional :: aqso4_o3_3d(:,:)   ! 3D SO4 aqueous phase chemistry due to O3 (kg/m2)
 
 
     ! local vars ...
 
-    real(r8) :: dqdt_aqso4(ncol,pver,gas_pcnst), &
-         dqdt_aqh2so4(ncol,pver,gas_pcnst), &
-         dqdt_aqhprxn(ncol,pver), dqdt_aqo3rxn(ncol,pver), &
-         sflx(1:ncol)
+    ! Tendency arrays are indexed by the aerosol element index (1..ncnst_tot)
+    real(r8) :: dqdt_aqso4(ncol,pver,ncnst_tot), &
+         dqdt_aqh2so4(ncol,pver,ncnst_tot), &
+         dqdt_aqhprxn(ncol,pver), dqdt_aqo3rxn(ncol,pver)
 
     real(r8), allocatable :: faqgain_msa(:), faqgain_so4(:), qnum_c(:)
 
@@ -232,14 +235,10 @@ contains
     integer :: i,k
     real(r8) :: xl
     character(len=32) :: spectype
-    real(r8) :: density
 
-    ! Allocate mode-dependent arrays
-    if (.not. allocated(faqgain_msa)) then
-       allocate(faqgain_msa(aero_props%nbins()))
-       allocate(faqgain_so4(aero_props%nbins()))
-       allocate(qnum_c(aero_props%nbins()))
-    endif
+    allocate(faqgain_msa(aero_props%nbins()))
+    allocate(faqgain_so4(aero_props%nbins()))
+    allocate(qnum_c(aero_props%nbins()))
 
     ! make sure dqdt is zero initially, for budgets
     dqdt_aqso4(:,:,:) = 0.0_r8
@@ -290,11 +289,9 @@ contains
 
                 ! faqgain_so4(n) = fraction of total so4_c gain going to mode n
                 ! these are proportional to the activated particle MR for each mode
-                ! Check if mode has sulfate species
                 sumf = 0.0_r8
                 do n = 1, aero_props%nbins()
                    faqgain_so4(n) = 0.0_r8
-                   ! Check if this mode has sulfate
                    do l = 1, aero_props%nspecies(n)
                       call aero_props%get(n, l, spectype=spectype)
                       if (trim(spectype) == 'sulfate') then
@@ -317,7 +314,6 @@ contains
                 sumf = 0.0_r8
                 do n = 1, aero_props%nbins()
                    faqgain_msa(n) = 0.0_r8
-                   ! Check if this mode has MSA
                    do l = 1, aero_props%nspecies(n)
                       call aero_props%get(n, l, spectype=spectype)
                       if (trim(spectype) == 'msa') then
@@ -336,7 +332,7 @@ contains
                 end if
                 ! at this point (sumf <= 0.0) only when all the faqgain_msa are zero
 
-                uptkrate = cldaero_uptakerate( xl, cldnum(i,k), cfact(i,k), cldfrc(i,k), tfld(i,k),  press(i,k) )
+                uptkrate = cldaero_uptakerate( xl, cldnum(i,k), cfact(i,k), cldfrc(i,k), tfld(i,k), press(i,k) )
                 ! average uptake rate over dtime
                 uptkrate = (1.0_r8 - exp(-min(100._r8,dtime*uptkrate))) / dtime
 
@@ -386,15 +382,14 @@ contains
                          dqdt= dqdt_aq + dqdt_wr
                          qcw(i,k,mm) = qcw(i,k,mm) + dqdt*dtime
 
-
                       end if
                       if (trim(spectype) == 'ammonium') then
                          if (delnh4 > 0.0_r8) then
-                            dqdt_aq = faqgain_so4(n)*delnh4/dtime*cldfrc(i,k)
+                            dqdt_aq = faqgain_so4(m)*delnh4/dtime*cldfrc(i,k)
                             dqdt = dqdt_aq
                             qcw(i,k,mm) = qcw(i,k,mm) + dqdt*dtime
                          else
-                            dqdt = (qcw(i,k,l)/max(xnh4c(i,k),1.0e-35_r8)) &
+                            dqdt = (qcw(i,k,mm)/max(xnh4c(i,k),1.0e-35_r8)) &
                                  *delnh4/dtime*cldfrc(i,k)
                             qcw(i,k,mm) = qcw(i,k,mm) + dqdt*dtime
                          endif
@@ -479,27 +474,25 @@ contains
 
     ! diagnostics
 
-    ! Sum up diagnostics for each mode containing sulfate
+    ! Sum up diagnostics for each mode containing sulfate.
+    ! Tendencies are in mol_SO4/mol_air/s; convert to kg_SO4/m2/s using
+    ! specmw_so4 (g/mol) and mbar (g/mol) from the aerosol_properties interface.
     do n = 1, aero_props%nbins()
        aqso4(:,n) = 0._r8
        aqh2so4(:,n) = 0._r8
-       
-       ! Find sulfate species in this mode
+
        do l = 1, aero_props%nspecies(n)
           call aero_props%get(n, l, spectype=spectype)
           if (trim(spectype) == 'sulfate') then
              mm = aero_props%indexer(n,l)
-             m = mm - loffset
-             if (m > 0) then
-                do k=1,pver
-                   do i=1,ncol
-                      aqso4(i,n)=aqso4(i,n)+dqdt_aqso4(i,k,m)*adv_mass(m)/mbar(i,k) &
-                           *pdel(i,k)/gravit ! kg/m2/s
-                      aqh2so4(i,n)=aqh2so4(i,n)+dqdt_aqh2so4(i,k,m)*adv_mass(m)/mbar(i,k) &
-                           *pdel(i,k)/gravit ! kg/m2/s
-                   enddo
+             do k=1,pver
+                do i=1,ncol
+                   aqso4(i,n)=aqso4(i,n)+dqdt_aqso4(i,k,mm)*specmw_so4/mbar(i,k) &
+                        *pdel(i,k)/gravit ! kg/m2/s
+                   aqh2so4(i,n)=aqh2so4(i,n)+dqdt_aqh2so4(i,k,mm)*specmw_so4/mbar(i,k) &
+                        *pdel(i,k)/gravit ! kg/m2/s
                 enddo
-             endif
+             enddo
              exit  ! Only process first sulfate species in mode
           endif
        enddo
@@ -540,6 +533,10 @@ contains
           enddo
        enddo
     end if
+
+    deallocate(faqgain_msa)
+    deallocate(faqgain_so4)
+    deallocate(qnum_c)
 
   end subroutine sox_cldaero_update
 

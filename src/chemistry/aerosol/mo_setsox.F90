@@ -38,7 +38,9 @@ contains
     use phys_control, only : phys_getopts
     use carma_flags_mod, only : carma_do_cloudborne
     use sox_cldaero_mod, only : sox_cldaero_init
+    use modal_aerosol_properties_mod, only : modal_aerosol_properties
 
+    type(modal_aerosol_properties), pointer :: aero_props
     logical :: modal_aerosols
 
     call phys_getopts( prog_modal_aero_out=modal_aerosols )
@@ -142,7 +144,8 @@ contains
        return
     end if
 
-    call sox_cldaero_init()
+    aero_props => modal_aerosol_properties()
+    call sox_cldaero_init(aero_props)
 
   end subroutine sox_inti
 
