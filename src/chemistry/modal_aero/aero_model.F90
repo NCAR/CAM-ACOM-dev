@@ -119,7 +119,7 @@ contains
     character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
     ! Local variables
-    integer :: unitn, ierr
+    integer :: unitn, ierr, itmp
     character(len=*), parameter :: subname = 'aero_model_readnl'
 
     ! Namelist variables
@@ -147,9 +147,13 @@ contains
 #ifdef SPMD
     ! Broadcast namelist variables
     call mpibcast(aer_drydep_list,   len(aer_drydep_list(1))*pcnst, mpichar, 0, mpicom)
-    call mpibcast(modal_strat_sulfate,     1,                       mpilog,  0, mpicom)
+    itmp = merge(1, 0, modal_strat_sulfate)
+    call mpibcast(itmp,                    1,                       mpiint,  0, mpicom)
+    modal_strat_sulfate = itmp /= 0
     call mpibcast(seasalt_emis_scale, 1,                            mpir8,   0, mpicom)
-    call mpibcast(modal_accum_coarse_exch, 1,                       mpilog,  0, mpicom)
+    itmp = merge(1, 0, modal_accum_coarse_exch)
+    call mpibcast(itmp,                    1,                       mpiint,  0, mpicom)
+    modal_accum_coarse_exch = itmp /= 0
 #endif
 
     drydep_list = aer_drydep_list
