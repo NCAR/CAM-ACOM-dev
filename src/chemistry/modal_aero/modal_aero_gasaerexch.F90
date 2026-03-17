@@ -234,15 +234,15 @@ implicit none
 
    logical  :: dotend(pcnstxx)          ! identifies species directly involved in
                                         !    gas-aerosol exchange (gas condensation)
-   logical  :: dotendqqcw(pcnstxx)      ! like dotend but for cloud-borner tracers
-   logical  :: dotendrn(pcnstxx), dotendqqcwrn(pcnstxx)
+   logical  :: dotendqqcw(ncnst_tot)    ! like dotend but for cloud-borner tracers
+   logical  :: dotendrn(pcnstxx), dotendqqcwrn(ncnst_tot)
                                         ! identifies species involved in renaming
                                         !    after "continuous growth"
                                         !    (gas-aerosol exchange and aqchem)
 
    integer, parameter :: nsrflx = 2     ! last dimension of qsrflx
    real(r8) :: dqdt(ncol,pver,pcnstxx)  ! TMR "delta q" array - NOTE dims
-   real(r8) :: dqqcwdt(ncol,pver,pcnstxx) ! like dqdt but for cloud-borner tracers
+   real(r8) :: dqqcwdt(ncol,pver,ncnst_tot) ! like dqdt but for cloud-borner tracers
    real(r8) :: qsrflx(pcols,pcnstxx,nsrflx)
                               ! process-specific column tracer tendencies
                               ! (1=renaming, 2=gas condensation)
@@ -251,16 +251,16 @@ implicit none
    real(r8) :: qconbg(pcols,pver),qevapbg(pcols,pver)
    real(r8) :: qcon(pcols,pver),qevap(pcols,pver)
 
-   real(r8) :: qqcwsrflx(pcols,pcnstxx,nsrflx)
+   real(r8) :: qqcwsrflx(pcols,ncnst_tot,nsrflx)
 
 !  following only needed for diagnostics
    real(r8) :: qold(ncol,pver,pcnstxx)  ! NOTE dims
    real(r8) :: qnew(ncol,pver,pcnstxx)  ! NOTE dims
    real(r8) :: qdel(ncol,pver,pcnstxx)  ! NOTE dims
    real(r8) :: dumavec(1000), dumbvec(1000), dumcvec(1000)
-   real(r8) :: qqcwold(ncol,pver,pcnstxx)
+   real(r8) :: qqcwold(ncol,pver,ncnst_tot)
    real(r8) :: dqdtsv1(ncol,pver,pcnstxx)
-   real(r8) :: dqqcwdtsv1(ncol,pver,pcnstxx)
+   real(r8) :: dqqcwdtsv1(ncol,pver,ncnst_tot)
 
 
 !----------------------------------------------------------------------
