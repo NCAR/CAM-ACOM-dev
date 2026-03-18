@@ -1014,6 +1014,9 @@ contains
     real(r8) :: dvmrcwdt(ncol,pver,ncnst_tot)
     real(r8) :: dvmrdt(ncol,pver,gas_pcnst)
     real(r8) :: vmrcw(ncol,pver,ncnst_tot)            ! cloud-borne aerosol (vmr)
+    real(r8) :: vmrcw_pcnst(ncol,pver,gas_pcnst)     ! vmrcw in pcnstxx index space for gasaerexch
+    real(r8) :: dvmrcwdt_pcnst(ncol,pver,gas_pcnst)  ! dvmrcwdt in pcnstxx index space
+    integer  :: l_pcnst                               ! pcnstxx index for mode species
 
     real(r8) ::  aqso4(ncol,ntot_amode)               ! aqueous phase chemistry
     real(r8) ::  aqh2so4(ncol,ntot_amode)             ! aqueous phase chemistry
@@ -1165,15 +1168,47 @@ contains
        nullify( sulfeq )
     endif
 
+    ! modal_aero_gasaerexch_sub (and modal_aero_rename_sub it calls) uses
+    ! pcnstxx (gas_pcnst) indexing for cloud-borne arrays, but vmrcw and
+    ! dvmrcwdt use the compact ncnst_tot indexing from aero_props%indexer.
+    ! Build pcnstxx-indexed versions via the mode species mapping.
+    vmrcw_pcnst(:,:,:) = 0.0_r8
+    dvmrcwdt_pcnst(:,:,:) = 0.0_r8
+    do m = 1, aero_props%nbins()
+       do l = 1, aero_props%nspecies(m)
+          mm = aero_props%indexer(m,l)
+          call aero_props%get(bin_ndx=m, species_ndx=l, specname=specname)
+          call cnst_get_ind(specname, ndx)
+          l_pcnst = ndx - loffset
+          if ((l_pcnst > 0) .and. (l_pcnst <= gas_pcnst)) then
+             vmrcw_pcnst(:ncol,:,l_pcnst) = vmrcw(:ncol,:,mm)
+             dvmrcwdt_pcnst(:ncol,:,l_pcnst) = dvmrcwdt(:ncol,:,mm)
+          end if
+       end do
+    end do
+
     call modal_aero_gasaerexch_sub(            &
          lchnk,    ncol,     nstep,            &
          loffset,            delt,             &
          tfld,     pmid,     pdel,             &
          qh2o,               troplev,          &
-         vmr,                vmrcw,            &
-         dvmrdt,             dvmrcwdt,         &
+         vmr,                vmrcw_pcnst,      &
+         dvmrdt,             dvmrcwdt_pcnst,   &
          dgnum,              dgnumwet,         &
          sulfeq     )
+
+    ! Map updated vmrcw_pcnst back to the ncnst_tot-indexed vmrcw
+    do m = 1, aero_props%nbins()
+       do l = 1, aero_props%nspecies(m)
+          mm = aero_props%indexer(m,l)
+          call aero_props%get(bin_ndx=m, species_ndx=l, specname=specname)
+          call cnst_get_ind(specname, ndx)
+          l_pcnst = ndx - loffset
+          if ((l_pcnst > 0) .and. (l_pcnst <= gas_pcnst)) then
+             vmrcw(:ncol,:,mm) = vmrcw_pcnst(:ncol,:,l_pcnst)
+          end if
+       end do
+    end do
 
     if (ndx_h2so4 > 0) then
        del_h2so4_aeruptk(1:ncol,:) = vmr(1:ncol,:,ndx_h2so4) - del_h2so4_aeruptk(1:ncol,:)

@@ -129,13 +129,13 @@ implicit none
                                                    ! *** MUST BE  #/kmol-air for number
                                                    ! *** MUST BE mol/mol-air for mass
                                                    ! *** NOTE ncol dimension
-   real(r8), intent(inout) :: qqcw(ncol,pver,ncnst_tot)
+   real(r8), intent(inout) :: qqcw(ncol,pver,pcnstxx)
                                                    ! like q but for cloud-borner tracers
    real(r8), intent(in)    :: dqdt_other(ncol,pver,pcnstxx)
                                                    ! TMR tendency from other continuous
                                                    ! growth processes (aqchem, soa??)
                                                    ! *** NOTE ncol dimension
-   real(r8), intent(in)    :: dqqcwdt_other(ncol,pver,ncnst_tot)
+   real(r8), intent(in)    :: dqqcwdt_other(ncol,pver,pcnstxx)
                                                    ! like dqdt_other but for cloud-borner tracers
    real(r8), intent(in)    :: t(pcols,pver)        ! temperature at model levels (K)
    real(r8), intent(in)    :: pmid(pcols,pver)     ! pressure at model levels (Pa)
@@ -234,15 +234,15 @@ implicit none
 
    logical  :: dotend(pcnstxx)          ! identifies species directly involved in
                                         !    gas-aerosol exchange (gas condensation)
-   logical  :: dotendqqcw(ncnst_tot)    ! like dotend but for cloud-borner tracers
-   logical  :: dotendrn(pcnstxx), dotendqqcwrn(ncnst_tot)
+   logical  :: dotendqqcw(pcnstxx)      ! like dotend but for cloud-borner tracers
+   logical  :: dotendrn(pcnstxx), dotendqqcwrn(pcnstxx)
                                         ! identifies species involved in renaming
                                         !    after "continuous growth"
                                         !    (gas-aerosol exchange and aqchem)
 
    integer, parameter :: nsrflx = 2     ! last dimension of qsrflx
    real(r8) :: dqdt(ncol,pver,pcnstxx)  ! TMR "delta q" array - NOTE dims
-   real(r8) :: dqqcwdt(ncol,pver,ncnst_tot) ! like dqdt but for cloud-borner tracers
+   real(r8) :: dqqcwdt(ncol,pver,pcnstxx)   ! like dqdt but for cloud-borner tracers
    real(r8) :: qsrflx(pcols,pcnstxx,nsrflx)
                               ! process-specific column tracer tendencies
                               ! (1=renaming, 2=gas condensation)
@@ -251,16 +251,16 @@ implicit none
    real(r8) :: qconbg(pcols,pver),qevapbg(pcols,pver)
    real(r8) :: qcon(pcols,pver),qevap(pcols,pver)
 
-   real(r8) :: qqcwsrflx(pcols,ncnst_tot,nsrflx)
+   real(r8) :: qqcwsrflx(pcols,pcnstxx,nsrflx)
 
 !  following only needed for diagnostics
    real(r8) :: qold(ncol,pver,pcnstxx)  ! NOTE dims
    real(r8) :: qnew(ncol,pver,pcnstxx)  ! NOTE dims
    real(r8) :: qdel(ncol,pver,pcnstxx)  ! NOTE dims
    real(r8) :: dumavec(1000), dumbvec(1000), dumcvec(1000)
-   real(r8) :: qqcwold(ncol,pver,ncnst_tot)
+   real(r8) :: qqcwold(ncol,pver,pcnstxx)
    real(r8) :: dqdtsv1(ncol,pver,pcnstxx)
-   real(r8) :: dqqcwdtsv1(ncol,pver,ncnst_tot)
+   real(r8) :: dqqcwdtsv1(ncol,pver,pcnstxx)
 
 
 !----------------------------------------------------------------------
@@ -823,7 +823,6 @@ implicit none
 
 
 !  This applies dqdt tendencies for all species
-!  apply the dqdt to update q (interstitial, pcnstxx-indexed)
 !
    do l = 1, pcnstxx
       if ( dotend(l) .or. dotendrn(l) ) then
@@ -833,9 +832,6 @@ implicit none
             end do
          end do
       end if
-   end do
-!  apply the dqqcwdt tendencies to update qqcw (cloud-borne, ncnst_tot-indexed)
-   do l = 1, ncnst_tot
       if ( dotendqqcw(l) .or. dotendqqcwrn(l) ) then
          do k = top_lev, pver
             do i = 1, ncol
