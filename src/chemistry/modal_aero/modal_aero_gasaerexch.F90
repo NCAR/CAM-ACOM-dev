@@ -823,7 +823,7 @@ implicit none
 
 
 !  This applies dqdt tendencies for all species
-!  apply the dqdt to update q (and same for qqcw)
+!  apply the dqdt to update q (interstitial, pcnstxx-indexed)
 !
    do l = 1, pcnstxx
       if ( dotend(l) .or. dotendrn(l) ) then
@@ -833,6 +833,9 @@ implicit none
             end do
          end do
       end if
+   end do
+!  apply the dqqcwdt tendencies to update qqcw (cloud-borne, ncnst_tot-indexed)
+   do l = 1, ncnst_tot
       if ( dotendqqcw(l) .or. dotendqqcwrn(l) ) then
          do k = top_lev, pver
             do i = 1, ncol
